@@ -1,0 +1,477 @@
+// ===================== MAIN APP ROUTER =====================
+
+let currentPage = 'dashboard';
+
+function navigateTo(page){
+  currentPage = page;
+  renderApp();
+}
+
+async function initApp(){
+  try {
+    // Attempt to load data from DB before starting the app
+    await loadRoomsFromDB();
+    await loadTenantsFromDB();
+  } catch (err) {
+    console.error("Failed to load data on boot", err);
+  }
+  document.getElementById('page-loader').classList.add('fade-out');
+  setTimeout(renderApp, 500);
+}
+
+function renderApp(){
+  const user = getCurrentUser();
+  const app = document.getElementById('app');
+  const unread = getUnreadCount();
+
+  const isGuest = user.role === 'guest';
+
+  const navItems = isGuest ? [
+    {id:'rooms',icon:'building',label:'Rooms'},
+    {id:'booking',icon:'key',label:'Book Room'},
+    {id:'reviews',icon:'star',label:'Reviews'},
+    {id:'visit',icon:'calendar-check',label:'Book Visit'},
+  ] : user.role === 'admin' ? [
+    {id:'dashboard',icon:'tachometer-alt',label:'Dashboard'},
+    {id:'rooms',icon:'building',label:'Rooms'},
+    {id:'tenants',icon:'users',label:'Tenants'},
+    {id:'finance',icon:'rupee-sign',label:'Finance'},
+    {id:'rent',icon:'money-bill-wave',label:'Rent Collection'},
+    {id:'documents',icon:'folder-open',label:'Documents'},
+    {id:'notifications',icon:'bell',label:'Notifications',badge:unread},
+    {id:'reviews',icon:'star',label:'Reviews'},
+    {id:'visit',icon:'calendar-check',label:'Visit Bookings'},
+  ] : [
+    {id:'dashboard',icon:'tachometer-alt',label:'My Dashboard'},
+    {id:'tenants',icon:'user-circle',label:'My Profile'},
+    {id:'finance',icon:'rupee-sign',label:'My Finances'},
+    {id:'documents',icon:'folder-open',label:'My Documents'},
+    {id:'notifications',icon:'bell',label:'Notifications',badge:unread},
+    {id:'reviews',icon:'star',label:'Reviews'},
+    {id:'visit',icon:'calendar-check',label:'Book Visit'},
+  ];
+
+  app.innerHTML = `
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <div class="logo-icon"><i class="fas fa-home"></i></div>
+        <div class="logo-text">
+          <h3>SLV PG</h3>
+          <p>Women's PG, Hyderabad</p>
+        </div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        ${navItems.map(n=>`
+          <button class="nav-item ${currentPage===n.id?'active':''}" onclick="navigateTo('${n.id}')">
+            <i class="fas fa-${n.icon}"></i> ${n.label}
+            ${n.badge?`<span class="nav-badge">${n.badge}</span>`:''}
+          </button>`).join('')}
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar">${user.name[0]}</div>
+        <div class="user-info">
+          <div class="name">${user.name}</div>
+          <div class="role">${user.role==='admin'?'Owner/Admin':user.role==='tenant'?'Tenant':'Guest'}</div>
+        </div>
+        <button class="logout-btn" onclick="logoutUser()" title="Logout"><i class="fas fa-sign-out-alt"></i></button>
+      </div>
+    </div>
+  </div>
+  
+  <div class="main-content">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      </div>
+      <div class="topbar-right">
+        ${unread>0?`<button class="notif-btn" onclick="navigateTo('notifications')"><i class="fas fa-bell"></i><div class="notif-dot"></div></button>`:''}
+        <div style="font-size:12px;color:var(--text3)">${new Date().toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>
+      </div>
+    </div>
+    <div id="page-content">
+      ${renderPage(currentPage)}
+    </div>
+  </div>
+
+  <!-- Demo Switcher -->
+  <div class="demo-switcher">
+    <div class="demo-switcher-header" onclick="toggleDemoSwitcher()">
+      <span><i class="fas fa-flask" style="color:var(--accent);"></i> Quick Demo Switcher</span>
+      <i class="fas fa-chevron-up toggle-icon" id="demo-toggle-icon"></i>
+    </div>
+    <div class="demo-switcher-body hidden" id="demo-switcher-body">
+      <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9999999999');navigateTo('dashboard');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user-shield" style="color:var(--primary-light);"></i> Admin / Owner</button>
+      <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9876543210');navigateTo('dashboard');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user-circle" style="color:var(--secondary);"></i> Tenant (Priya)</button>
+      <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9876543211');navigateTo('dashboard');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user-circle" style="color:var(--accent);"></i> Tenant (Ananya)</button>
+      <button class="btn btn-secondary btn-sm" onclick="continueAsGuest();navigateTo('rooms');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user" style="color:var(--info);"></i> Guest View</button>
+      <button class="btn btn-secondary btn-sm" onclick="showSMSConfigModal()" style="margin-bottom:6px;width:100%;justify-content:flex-start;background:rgba(124,58,237,0.08);border:1px dashed var(--primary-light);"><i class="fas fa-comment-sms" style="color:var(--primary-light);"></i> SMS Setup Gateway</button>
+      <button class="btn btn-danger btn-sm" onclick="logoutUser()" style="width:100%;justify-content:center;"><i class="fas fa-sign-out-alt"></i> Logout / Clear Session</button>
+    </div>
+  </div>
+  `;
+}
+
+function renderPage(page){
+  const user = getCurrentUser();
+  switch(page){
+    case 'dashboard': return user.role==='tenant'?renderTenantDashboard():renderAdminDashboard();
+    case 'rooms': return renderRoomsPage();
+    case 'booking': return renderBookingPage();
+    case 'tenants': return renderTenantsPage();
+    case 'finance': return renderFinancePage();
+    case 'rent': return renderRentCollection();
+    case 'documents': return renderDocumentsPage();
+    case 'notifications': return renderNotificationsPanel();
+    case 'reviews': return renderReviewsPage();
+    case 'visit': return renderVisitPage();
+    default: return renderAdminDashboard();
+  }
+}
+
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+// ---- Admin Dashboard ----
+function renderAdminDashboard(){
+  const tenants = (DB.get('tenants')||[]).filter(t=>t.status==='active');
+  const rooms = getRoomOccupancy();
+  const payments = DB.get('payments')||[];
+  const currentMonth = new Date().toISOString().slice(0,7);
+  const mPayments = payments.filter(p=>p.month===currentMonth);
+  const collected = mPayments.filter(p=>p.status==='paid').reduce((s,p)=>s+p.amount,0);
+  const pending = mPayments.filter(p=>p.status==='pending');
+  const totalBeds = rooms.reduce((s,r)=>s+r.beds,0);
+  const occupiedBeds = rooms.reduce((s,r)=>s+r.occupied,0);
+  const visits = (DB.get('visits')||[]).filter(v=>v.status==='pending');
+  const pendingReviews = (DB.get('reviews')||[]).filter(r=>r.status==='pending');
+
+  return `
+  <div class="page-header">
+    <h1>Welcome back, <span class="grad-text">Admin</span> 👋</h1>
+    <p>Sri Lakshmi Venkateswara Women's PG — Hyderabad</p>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card purple" onclick="navigateTo('tenants')" style="cursor:pointer">
+      <div class="stat-icon purple"><i class="fas fa-users"></i></div>
+      <div class="stat-value">${tenants.length}</div>
+      <div class="stat-label">Active Tenants</div>
+    </div>
+    <div class="stat-card green" onclick="navigateTo('rooms')" style="cursor:pointer">
+      <div class="stat-icon green"><i class="fas fa-bed"></i></div>
+      <div class="stat-value">${totalBeds-occupiedBeds}</div>
+      <div class="stat-label">Vacant Beds</div>
+    </div>
+    <div class="stat-card pink" onclick="navigateTo('finance')" style="cursor:pointer">
+      <div class="stat-icon pink"><i class="fas fa-rupee-sign"></i></div>
+      <div class="stat-value">₹${(collected/1000).toFixed(0)}K</div>
+      <div class="stat-label">Collected (${currentMonth})</div>
+    </div>
+    <div class="stat-card amber" onclick="navigateTo('finance')" style="cursor:pointer">
+      <div class="stat-icon amber"><i class="fas fa-clock"></i></div>
+      <div class="stat-value">${pending.length}</div>
+      <div class="stat-label">Pending Dues</div>
+    </div>
+    <div class="stat-card blue" onclick="navigateTo('visit')" style="cursor:pointer">
+      <div class="stat-icon blue"><i class="fas fa-calendar-check"></i></div>
+      <div class="stat-value">${visits.length}</div>
+      <div class="stat-label">Visit Requests</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><i class="fas fa-building"></i> Occupancy Overview</div>
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+          <span>Overall Occupancy</span>
+          <span style="font-weight:600;color:var(--primary-light)">${Math.round(occupiedBeds/totalBeds*100)}%</span>
+        </div>
+        <div class="progress-bar" style="height:10px"><div class="progress-fill" style="width:${occupiedBeds/totalBeds*100}%;background:linear-gradient(90deg,var(--primary),var(--secondary))"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:6px">
+          <span>${occupiedBeds} occupied</span><span>${totalBeds-occupiedBeds} vacant</span>
+        </div>
+      </div>
+      <div class="floor-grid">
+        ${[1,2,3,4,5,6].map(f=>{
+          const floorRooms = rooms.filter(r=>r.floor===f);
+          return `<div class="floor-row">
+            <div class="floor-label">Floor ${f}</div>
+            <div class="rooms-row">
+              ${floorRooms.map(r=>{
+                const cls=r.occupied===0?'available':r.occupied===r.beds?'occupied':'partial';
+                return `<div class="room-cell ${cls}" onclick="navigateTo('rooms')" title="Room ${r.number}: ${r.occupied}/${r.beds}">
+                  <span class="rnum">${r.number}</span>
+                  <span class="rocc">${r.occupied}/${r.beds}</span>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title"><i class="fas fa-exclamation-circle" style="color:var(--danger)"></i> Pending Dues</div>
+        ${pending.length===0?'<div style="text-align:center;padding:16px;color:var(--success)"><i class="fas fa-check-circle"></i> All collected!</div>':
+        pending.slice(0,5).map(p=>`
+          <div class="due-item">
+            <div><strong style="font-size:13px">${p.tenantName}</strong><div style="font-size:11px;color:var(--text3)">Room ${p.roomId.replace('R','')} · Due: ${formatDate(p.dueDate)}</div></div>
+            <div style="text-align:right"><div style="font-weight:700;color:var(--danger)">₹${p.amount.toLocaleString()}</div><button class="btn btn-success btn-sm" style="margin-top:4px" onclick="recordPayment('${p.id}')">Pay</button></div>
+          </div>`).join('')}
+        ${pending.length>5?`<p style="font-size:12px;color:var(--text3);text-align:center;margin-top:8px;cursor:pointer" onclick="navigateTo('finance')">+${pending.length-5} more →</p>`:''}
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fas fa-bolt"></i> Quick Actions</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="btn btn-primary" onclick="showAddTenantModal()"><i class="fas fa-user-plus"></i> Add Tenant</button>
+          <button class="btn btn-secondary" onclick="addPaymentModal()"><i class="fas fa-rupee-sign"></i> Record Payment</button>
+          <button class="btn btn-secondary" onclick="navigateTo('notifications')"><i class="fas fa-bell"></i> Send Notice</button>
+          <button class="btn btn-secondary" onclick="sendDueReminders()"><i class="fas fa-paper-plane"></i> Send Reminders</button>
+          <button class="btn btn-secondary" onclick="navigateTo('documents')"><i class="fas fa-folder-open"></i> Documents</button>
+          <button class="btn btn-secondary" onclick="navigateTo('visit')"><i class="fas fa-calendar"></i> Visits (${visits.length})</button>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="showSMSConfigModal()" style="width:100%;justify-content:center;margin-top:8px;background:rgba(124,58,237,0.05);border:1px dashed var(--primary-light);color:var(--text2);padding:6px;font-size:12px;"><i class="fas fa-comment-sms" style="color:var(--primary-light);margin-right:6px;"></i> SMS Gateway Setup</button>
+        ${pendingReviews.length?`<div style="margin-top:12px;padding:10px;background:rgba(245,158,11,.1);border-radius:8px;cursor:pointer" onclick="navigateTo('reviews')"><p style="font-size:13px;color:var(--accent)"><i class="fas fa-star"></i> ${pendingReviews.length} review(s) awaiting approval</p></div>`:''}
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:20px">
+    <div class="card-title"><i class="fas fa-users"></i> Recent Tenants</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Name</th><th>Room</th><th>Rent</th><th>Joined</th><th>May 2026</th></tr></thead>
+        <tbody>
+          ${tenants.slice(0,6).map(t=>{
+            const p=payments.find(p=>p.tenantId===t.id&&p.month===currentMonth);
+            return `<tr onclick="showTenantDetail('${t.id}')" style="cursor:pointer">
+              <td><span class="badge badge-purple">${t.id}</span></td>
+              <td><strong>${t.name}</strong></td>
+              <td>Room ${t.roomId.replace('R','')} · Bed ${t.bedNo}</td>
+              <td>₹${t.rent.toLocaleString()}</td>
+              <td>${formatDate(t.joinDate)}</td>
+              <td><span class="badge ${p&&p.status==='paid'?'badge-success':'badge-danger'}">${p?p.status:'no record'}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+// ---- Tenant Dashboard ----
+function renderTenantDashboard(){
+  const user = getCurrentUser();
+  const t = (DB.get('tenants')||[]).find(t=>t.id===user.tenantId);
+  if(!t) return `<div class="empty-state"><i class="fas fa-user-slash"></i><p>Profile not found. Contact admin.</p></div>`;
+  const payments = getTenantPayments(t.id);
+  const pending = payments.filter(p=>p.status==='pending');
+  const currentMonth = new Date().toISOString().slice(0,7);
+  const thisMonth = payments.find(p=>p.month===currentMonth);
+  const reviews = (DB.get('reviews')||[]).filter(r=>r.status==='approved').slice(0,3);
+
+  return `
+  <div class="page-header">
+    <h1>Welcome, <span class="grad-text">${t.name.split(' ')[0]}</span> 👋</h1>
+    <p>Tenant ID: ${t.id} · Room ${t.roomId.replace('R','')} · Bed ${t.bedNo}</p>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card purple"><div class="stat-icon purple"><i class="fas fa-rupee-sign"></i></div><div class="stat-value">₹${t.rent.toLocaleString()}</div><div class="stat-label">Monthly Rent</div></div>
+    <div class="stat-card pink"><div class="stat-icon pink"><i class="fas fa-clock"></i></div><div class="stat-value">${pending.length}</div><div class="stat-label">Pending Dues</div></div>
+    <div class="stat-card green"><div class="stat-icon green"><i class="fas fa-check-circle"></i></div><div class="stat-value">${payments.filter(p=>p.status==='paid').length}</div><div class="stat-label">Months Paid</div></div>
+    <div class="stat-card amber"><div class="stat-icon amber"><i class="fas fa-shield-alt"></i></div><div class="stat-value">₹${t.deposit.toLocaleString()}</div><div class="stat-label">Security Deposit</div></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><i class="fas fa-calendar"></i> This Month — ${currentMonth}</div>
+      ${thisMonth?`
+        <div style="text-align:center;padding:20px">
+          <div style="font-size:36px;font-weight:700;color:${thisMonth.status==='paid'?'var(--success)':'var(--danger)'}">${thisMonth.status==='paid'?'✓ PAID':'⚠ PENDING'}</div>
+          <div style="font-size:22px;font-weight:700;margin:8px 0">₹${thisMonth.amount.toLocaleString()}</div>
+          ${thisMonth.status==='paid'?`<p style="font-size:13px;color:var(--text3)">Paid on ${formatDate(thisMonth.paidOn)} via ${thisMonth.paymentMode}</p>`:`<p style="font-size:13px;color:var(--danger)">Due by ${formatDate(thisMonth.dueDate)}. Please pay to avoid late fees.</p>`}
+        </div>`:
+      `<div class="empty-state"><i class="fas fa-question-circle"></i><p>No record for this month</p></div>`}
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="fas fa-history"></i> Recent Payments</div>
+      ${payments.slice(0,4).map(p=>`
+        <div class="due-item">
+          <div><strong style="font-size:13px">${p.month}</strong><div style="font-size:11px;color:var(--text3)">${p.paidOn?`Paid ${formatDate(p.paidOn)}`:`Due ${formatDate(p.dueDate)}`}</div></div>
+          <div style="text-align:right"><div style="font-weight:700">₹${p.amount.toLocaleString()}</div><span class="badge ${p.status==='paid'?'badge-success':'badge-danger'}">${p.status}</span></div>
+        </div>`).join('')}
+      <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="navigateTo('finance')">View All →</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-title"><i class="fas fa-star" style="color:var(--accent)"></i> Recent Reviews from Residents</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+      ${reviews.map(r=>`
+        <div style="padding:14px;background:var(--bg3);border-radius:10px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <strong style="font-size:13px">${r.name}</strong>
+            <span class="stars" style="font-size:12px">${'★'.repeat(r.rating)}</span>
+          </div>
+          <p style="font-size:12px;color:var(--text2);font-style:italic">"${r.comment.slice(0,80)}..."</p>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+// ---- Rent Collection Page ----
+function renderRentCollection(){
+  const user = getCurrentUser();
+  const currentMonth = new Date().toISOString().slice(0,7);
+  const tenants = (DB.get('tenants')||[]).filter(t=>t.status==='active');
+  const payments = DB.get('payments')||[];
+
+  const months=['2026-05','2026-04','2026-03','2026-02','2026-01'];
+
+  return `
+  <div class="page-header">
+    <h1><i class="fas fa-money-bill-wave" style="color:var(--success)"></i> Rent Collection</h1>
+    <p>Monthly payment status tracker</p>
+  </div>
+  <div style="display:flex;gap:10px;margin-bottom:20px;align-items:center;flex-wrap:wrap">
+    <select class="form-control" id="rc-month" style="width:160px" onchange="renderRentCollectionTable()">
+      ${months.map(m=>`<option value="${m}" ${m===currentMonth?'selected':''}>${m}</option>`).join('')}
+    </select>
+    <button class="btn btn-primary btn-sm" onclick="sendDueReminders()"><i class="fas fa-bell"></i> Send Reminders</button>
+    <button class="btn btn-secondary btn-sm" onclick="exportFinance()"><i class="fas fa-download"></i> Export</button>
+  </div>
+  <div class="card" id="rc-table-wrap">
+    ${renderRCTable(currentMonth, tenants, payments)}
+  </div>`;
+}
+
+function renderRCTable(month, tenants, payments){
+  const paid = payments.filter(p=>p.month===month&&p.status==='paid');
+  const total = tenants.reduce((s,t)=>s+t.rent,0);
+  const collected = paid.reduce((s,p)=>s+p.amount,0);
+  const pct = total?Math.round(collected/total*100):0;
+
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <span class="card-title" style="margin-bottom:0">Collection Status — ${month}</span>
+    <div style="display:flex;gap:12px;font-size:13px">
+      <span style="color:var(--success)"><i class="fas fa-check-circle"></i> Paid: ${paid.length}</span>
+      <span style="color:var(--danger)"><i class="fas fa-clock"></i> Pending: ${tenants.length-paid.length}</span>
+      <span style="color:var(--text2)">₹${collected.toLocaleString()} / ₹${total.toLocaleString()} (${pct}%)</span>
+    </div>
+  </div>
+  <div class="progress-bar" style="margin-bottom:20px"><div class="progress-fill" style="width:${pct}%;background:linear-gradient(90deg,var(--success),#34d399)"></div></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Tenant</th><th>Room</th><th>Rent</th><th>Status</th><th>Paid On</th><th>Mode</th><th>Action</th></tr></thead>
+      <tbody>
+        ${tenants.map(t=>{
+          const p=payments.find(p=>p.tenantId===t.id&&p.month===month);
+          return `<tr>
+            <td><strong>${t.name}</strong><div style="font-size:11px;color:var(--text3)">${t.id}</div></td>
+            <td>Room ${t.roomId.replace('R','')} · Bed ${t.bedNo}</td>
+            <td>₹${t.rent.toLocaleString()}</td>
+            <td><span class="badge ${p&&p.status==='paid'?'badge-success':'badge-danger'}">${p?p.status:'not recorded'}</span></td>
+            <td>${p&&p.paidOn||'—'}</td>
+            <td>${p&&p.paymentMode||'—'}</td>
+            <td>${!p||p.status==='pending'?`<button class="btn btn-success btn-sm" onclick="${p?`recordPayment('${p.id}')`:''}">${p?'<i class="fas fa-check"></i> Mark Paid':'—'}</button>`:'<span style="color:var(--text3);font-size:12px">✓</span>'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function renderRentCollectionTable(){
+  const month = document.getElementById('rc-month').value;
+  const tenants = (DB.get('tenants')||[]).filter(t=>t.status==='active');
+  const payments = DB.get('payments')||[];
+  document.getElementById('rc-table-wrap').innerHTML = renderRCTable(month, tenants, payments);
+}
+
+// ---- Utility Functions ----
+function showModal(title, content, showFooter=true){
+  const overlay = document.getElementById('modal-overlay');
+  const container = document.getElementById('modal-container');
+  overlay.classList.remove('hidden');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+  <div class="modal">
+    <div class="modal-header">
+      <h3>${title}</h3>
+      <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+    </div>
+    ${content}
+    ${showFooter?'<div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Close</button></div>':''}
+  </div>`;
+  overlay.onclick = closeModal;
+}
+
+function closeModal(){
+  document.getElementById('modal-overlay').classList.add('hidden');
+  document.getElementById('modal-container').classList.add('hidden');
+}
+
+function showToast(msg, type='info'){
+  const icons={success:'check-circle',error:'exclamation-circle',warning:'exclamation-triangle',info:'info-circle'};
+  const toast = document.createElement('div');
+  toast.className=`toast ${type}`;
+  toast.innerHTML=`<i class="fas fa-${icons[type]} toast-icon"></i><span class="toast-msg">${msg}</span>`;
+  document.getElementById('toast-container').appendChild(toast);
+  setTimeout(()=>toast.remove(), 4000);
+}
+
+function formatDate(dateStr){
+  if(!dateStr) return '—';
+  try{
+    const d = new Date(dateStr);
+    if(isNaN(d.getTime())) return dateStr;
+    const day = d.getDate().toString().padStart(2, '0');
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  }catch(e){ return dateStr; }
+}
+
+function downloadCSV(csv, filename){
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function toggleDemoSwitcher(){
+  const body = document.getElementById('demo-switcher-body');
+  const icon = document.getElementById('demo-toggle-icon');
+  if(body) {
+    const isHidden = body.classList.contains('hidden');
+    body.classList.toggle('hidden');
+    if(icon) {
+      icon.className = isHidden ? "fas fa-chevron-down toggle-icon" : "fas fa-chevron-up toggle-icon";
+    }
+  }
+}
+
+// ---- Boot ----
+window.addEventListener('DOMContentLoaded', ()=>{
+  if(restoreSession()){
+    initApp();
+  } else {
+    setTimeout(()=>{
+      document.getElementById('page-loader').classList.add('fade-out');
+      setTimeout(renderLoginPage, 500);
+    }, 2000);
+  }
+});
