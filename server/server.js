@@ -12,19 +12,12 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-// PostgreSQL connection config (Supabase)
-const dbConfig = {
-  host: 'db.swtklinograpjazmklbx.supabase.co',
-  port: 5432,
-  database: 'postgres',
-  user: 'postgres',
-  password: 'Kannayya@2026',
-  ssl: { rejectUnauthorized: false }
-};
+// PostgreSQL connection string
+const connectionString = 'postgresql://postgres:Kannayya%402026@db.swtklinograpjazmklbx.supabase.co:5432/postgres';
 
 // ---- GET /api/rooms — Fetch all rooms from TarakRam_RoomDetails ----
 app.get('/api/rooms', async (req, res) => {
-  const client = new Client(dbConfig);
+  const client = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
   try {
     await client.connect();
     
@@ -66,7 +59,7 @@ app.get('/api/rooms', async (req, res) => {
 
 // ---- GET /api/tenants — Fetch all tenants from RoomWise_MemberList ----
 app.get('/api/tenants', async (req, res) => {
-  const client = new Client(dbConfig);
+  const client = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
   try {
     await client.connect();
     const result = await client.query('SELECT * FROM "RoomWise_MemberList" ORDER BY id ASC');

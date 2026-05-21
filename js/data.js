@@ -5,37 +5,84 @@ const DB = {
   del(key){ localStorage.removeItem('slvpg_'+key) }
 };
 
-// ===================== POSTGRESQL API CONFIGURATION =====================
-const API_BASE_URL = 'http://localhost:3001';
+// ===================== SUPABASE DIRECT CONNECTION (JDBC FORMAT) =====================
+// JDBC Connection String: jdbc:postgresql://db.swtklinograpjazmklbx.supabase.co:5432/postgres?user=postgres&password=Kannayya@2026
+// Parsed into Supabase REST API configuration below:
+const SUPABASE_CONFIG = {
+  // Connection string components (JDBC format reference)
+  jdbc: 'jdbc:postgresql://db.swtklinograpjazmklbx.supabase.co:5432/postgres?user=postgres&password=Kannayya@2026',
+  // Supabase REST API endpoint (derived from JDBC host)
+  url: 'https://swtklinograpjazmklbx.supabase.co',
+  // Supabase anon API key (for REST access — from Dashboard > Settings > API)
+  apiKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3dGtsaW5vZ3JhcGphem1rbGJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMzY3NjYsImV4cCI6MjA5NDkxMjc2Nn0.M2xt4dbfpnOeXwKZfdtcZNSDM1wb1Bo5TbOAe5jY9Sk'
+};
+
 let dbRoomsLoaded = false;
 let dbRoomsLoading = false;
 let dbRoomsError = null;
 
-// Fetch rooms from PostgreSQL (TarakRam_RoomDetails) via backend API
+// Helper: Make authenticated request to Supabase REST API (PostgREST)
+async function supabaseRequest(tableName, queryParams = '') {
+  const url = `${SUPABASE_CONFIG.url}/rest/v1/${tableName}${queryParams ? '?' + queryParams : ''}`;
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'apikey': SUPABASE_CONFIG.apiKey,
+      'Authorization': `Bearer ${SUPABASE_CONFIG.apiKey}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    }
+  });
+  if (!response.ok) {
+    const errorBody = await response.text();
+    console.error(`[Supabase] HTTP ${response.status}:`, errorBody);
+    throw new Error(`Supabase API error ${response.status}: ${errorBody}`);
+  }
+  return response.json();
+}
+
+// Fetch rooms from Supabase (TarakRam_RoomDetails) — direct REST API call
 async function fetchDBRooms() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/rooms`);
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    const data = await response.json();
-    if (data.success) {
-      return data.rooms;
-    } else {
-      throw new Error(data.error || 'Unknown API error');
-    }
+    // Fetch rooms directly from Supabase PostgREST
+    const roomRows = await supabaseRequest('TarakRam_RoomDetails', 'select=*&order=id.asc');
+
+    // Fetch members to calculate occupancy
+    const memberRows = await supabaseRequest('RoomWise_MemberList', 'select=*');
+
+    // Map DB columns to the format the frontend expects
+    const rooms = roomRows.map(row => {
+      const roomMembers = memberRows.filter(m => m.Room_No === row.Room_No);
+      return {
+        id: `R${row.Room_No}`,
+        number: String(row.Room_No),
+        floor: parseInt(row.Floor_No) || 1,
+        beds: parseInt(row.Room_Capacity) || 4,
+        occupied: roomMembers.length,
+        type: 'Standard',
+        rent: 6000,
+        created_at: row.created_at,
+        db_id: row.id,
+        members: roomMembers
+      };
+    });
+
+    console.log(`[Supabase] ✅ Fetched ${rooms.length} rooms from TarakRam_RoomDetails`);
+    return rooms;
   } catch (err) {
-    console.error('[DB] Failed to fetch rooms from PostgreSQL:', err.message);
+    console.error('[Supabase] Failed to fetch rooms:', err.message);
     throw err;
   }
 }
 
-// Load rooms from PostgreSQL and store in localStorage for seamless use
+// Load rooms from Supabase and store in localStorage for seamless use
 async function loadRoomsFromDB() {
   if (dbRoomsLoading) return; // Prevent duplicate calls
   dbRoomsLoading = true;
   dbRoomsError = null;
 
   try {
-    console.log('[DB] Fetching rooms from PostgreSQL (TarakRam_RoomDetails)...');
+    console.log('[Supabase] Fetching rooms from TarakRam_RoomDetails...');
     const dbRooms = await fetchDBRooms();
 
     // Store the DB rooms in localStorage — replaces any hardcoded rooms
@@ -43,50 +90,63 @@ async function loadRoomsFromDB() {
     dbRoomsLoaded = true;
     dbRoomsLoading = false;
 
-    console.log(`[DB] ✅ Loaded ${dbRooms.length} rooms from PostgreSQL`);
+    console.log(`[Supabase] ✅ Loaded ${dbRooms.length} rooms from database`);
     return dbRooms;
   } catch (err) {
     dbRoomsError = err.message;
     dbRoomsLoading = false;
     dbRoomsLoaded = false;
-    console.error('[DB] ❌ Room loading failed:', err.message);
+    console.error('[Supabase] ❌ Room loading failed:', err.message);
 
     // If DB fails, fall back to whatever is already in localStorage
     const fallback = DB.get('rooms');
     if (!fallback || fallback.length === 0) {
-      console.warn('[DB] No fallback rooms in localStorage either');
+      console.warn('[Supabase] No fallback rooms in localStorage either');
     }
     return fallback || [];
   }
 }
 
-// Fetch tenants from PostgreSQL (RoomWise_MemberList) via backend API
+// Fetch tenants from Supabase (RoomWise_MemberList) — direct REST API call
 async function fetchDBTenants() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/tenants`);
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    const data = await response.json();
-    if (data.success) {
-      return data.tenants;
-    } else {
-      throw new Error(data.error || 'Unknown API error');
-    }
+    const memberRows = await supabaseRequest('RoomWise_MemberList', 'select=*&order=id.asc');
+
+    // Map DB columns to the format the frontend expects
+    const tenants = memberRows.map(row => ({
+      id: `T${row.id}`,
+      name: row.Tenant_Name,
+      mobile: '9999999999',
+      email: 'tenant@example.com',
+      occupation: 'Member',
+      company: 'SLV PG',
+      roomId: `R${row.Room_No}`,
+      bedNo: 1,
+      joinDate: row.created_at,
+      rent: 6000,
+      deposit: 12000,
+      status: 'active',
+      db_id: row.id
+    }));
+
+    console.log(`[Supabase] ✅ Fetched ${tenants.length} tenants from RoomWise_MemberList`);
+    return tenants;
   } catch (err) {
-    console.error('[DB] Failed to fetch tenants from PostgreSQL:', err.message);
+    console.error('[Supabase] Failed to fetch tenants:', err.message);
     throw err;
   }
 }
 
-// Load tenants from PostgreSQL and store in localStorage
+// Load tenants from Supabase and store in localStorage
 async function loadTenantsFromDB() {
   try {
-    console.log('[DB] Fetching tenants from PostgreSQL (RoomWise_MemberList)...');
+    console.log('[Supabase] Fetching tenants from RoomWise_MemberList...');
     const dbTenants = await fetchDBTenants();
     DB.set('tenants', dbTenants);
-    console.log(`[DB] ✅ Loaded ${dbTenants.length} tenants from PostgreSQL`);
+    console.log(`[Supabase] ✅ Loaded ${dbTenants.length} tenants from database`);
     return dbTenants;
   } catch (err) {
-    console.error('[DB] ❌ Tenant loading failed:', err.message);
+    console.error('[Supabase] ❌ Tenant loading failed:', err.message);
     return DB.get('tenants') || [];
   }
 }
