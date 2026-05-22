@@ -49,6 +49,7 @@ function renderDocumentsPage(){
               </div>
             </div>
             <div style="display:flex;align-items:center;gap:8px">
+              <a href="javascript:void(0)" onclick="viewDocument('${d.id}', '${d.fileName}', '${d.type}')" class="btn btn-primary btn-sm" style="padding:4px 8px; border-radius:4px;" title="View"><i class="fas fa-eye"></i> View</a>
               <span class="badge ${d.verified?'badge-success':'badge-warning'}">${d.verified?'Verified':'Pending'}</span>
               ${!d.verified?`<button class="btn btn-success btn-sm" onclick="verifyDoc('${d.id}')"><i class="fas fa-check"></i></button>`:''}
               <button class="btn btn-danger btn-sm" onclick="deleteDoc('${d.id}')"><i class="fas fa-trash"></i></button>
@@ -77,7 +78,10 @@ function renderTenantDocs(docs, tenantId){
             <div style="font-size:12px;color:var(--text3)">${d.fileName} · Uploaded ${formatDate(d.uploadDate)}</div>
           </div>
         </div>
-        <span class="badge ${d.verified?'badge-success':'badge-warning'}">${d.verified?'✓ Verified':'⏳ Pending'}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <a href="javascript:void(0)" onclick="viewDocument('${d.id}', '${d.fileName}', '${d.type}')" class="btn btn-primary btn-sm" style="padding:4px 8px; border-radius:4px;" title="View"><i class="fas fa-eye"></i> View</a>
+          <span class="badge ${d.verified?'badge-success':'badge-warning'}">${d.verified?'✓ Verified':'⏳ Pending'}</span>
+        </div>
       </div>`).join('')}
   </div>
   <div class="card" style="margin-top:16px">
@@ -117,13 +121,25 @@ function showUploadModal(tenantId=''){
         <i class="fas fa-cloud-upload-alt" style="font-size:28px;color:var(--primary-light);display:block;margin-bottom:8px"></i>
         <p style="font-size:13px;color:var(--text2)">Click to select file (PDF, JPG, PNG)</p>
         <p style="font-size:11px;color:var(--text3);margin-top:4px">Max 5MB</p>
-        <input id="file-input" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="document.getElementById('ud-file').value=this.files[0]?.name||''" />
+        <input id="file-input" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleFileSelect(this)" />
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveDoc()"><i class="fas fa-upload"></i> Upload</button>
     </div>`,false);
+}
+
+let currentUploadData = null;
+function handleFileSelect(input){
+  const file = input.files[0];
+  if(!file) return;
+  document.getElementById('ud-file').value = file.name;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    currentUploadData = e.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 function saveDoc(){
@@ -133,8 +149,17 @@ function saveDoc(){
   if(!tenantId||!fileName){ showToast('Fill all required fields','error'); return; }
   const tenant=(DB.get('tenants')||[]).find(t=>t.id===tenantId);
   const docs=DB.get('documents')||[];
-  docs.push({id:genId('D'),tenantId,tenantName:tenant.name,type,fileName,uploadDate:new Date().toISOString().slice(0,10),verified:false});
+  const docId=genId('D');
+  docs.push({id:docId,tenantId,tenantName:tenant.name,type,fileName,uploadDate:new Date().toISOString().slice(0,10),verified:false});
   DB.set('documents',docs);
+  
+  if(currentUploadData){
+    const fileStore = DB.get('document_files')||{};
+    fileStore[docId] = currentUploadData;
+    DB.set('document_files', fileStore);
+    currentUploadData = null;
+  }
+  
   closeModal();
   showToast('Document uploaded!','success');
   navigateTo('documents');
@@ -155,4 +180,39 @@ function deleteDoc(id){
   DB.set('documents',docs);
   showToast('Document deleted','warning');
   navigateTo('documents');
+}
+
+function viewDocument(docId, fileName, type){
+  let icon = 'fa-file-alt';
+  const isImg = fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg');
+  const isPdf = fileName.endsWith('.pdf');
+  if(isImg) icon = 'fa-file-image';
+  else if(isPdf) icon = 'fa-file-pdf';
+
+  const fileStore = DB.get('document_files')||{};
+  const fileData = fileStore[docId];
+
+  let previewHtml = `<div style="margin-top:20px;padding:16px;background:var(--bg3);border-radius:8px;border:1px dashed var(--border)">
+         <p style="font-size:12px;color:var(--text2)"><em>No file content available. Please re-upload the document.</em></p>
+      </div>`;
+
+  if(fileData){
+    if(isImg){
+      previewHtml = `<div style="margin-top:20px;text-align:center;"><img src="${fileData}" style="max-width:100%;max-height:400px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.2)"/></div>`;
+    } else if(isPdf){
+      previewHtml = `<div style="margin-top:20px;height:400px"><iframe src="${fileData}" style="width:100%;height:100%;border:none;border-radius:8px"></iframe></div>`;
+    }
+  }
+
+  showModal('Document Viewer', `
+    <div style="text-align:center;padding:20px;padding-bottom:0">
+      ${!fileData?`<i class="fas ${icon}" style="font-size:64px;color:var(--primary);margin-bottom:16px;"></i>`:''}
+      <h3 style="font-size:16px;margin-bottom:8px">${fileName}</h3>
+      <p style="font-size:13px;color:var(--text3)">Type: ${type}</p>
+    </div>
+    ${previewHtml}
+    <div class="modal-footer" style="margin-top:20px">
+      <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+    </div>
+  `, false);
 }

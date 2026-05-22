@@ -2,8 +2,9 @@
 function renderFinancePage(){
   const user = getCurrentUser();
   if(user.role==='tenant') return renderTenantFinance();
-  const payments = DB.get('payments')||[];
   const tenants = (DB.get('tenants')||[]).filter(t=>t.status==='active');
+  const activeTenantIds = tenants.map(t=>t.id);
+  const payments = (DB.get('payments')||[]).filter(p=>activeTenantIds.includes(p.tenantId));
   const totalExpected = tenants.reduce((s,t)=>s+t.rent,0);
   const collected = payments.filter(p=>p.status==='paid').reduce((s,p)=>s+p.amount,0);
   const pending = payments.filter(p=>p.status==='pending').reduce((s,p)=>s+p.amount,0);
@@ -28,18 +29,20 @@ function renderFinancePage(){
     <div class="card">
       <div class="card-title"><i class="fas fa-exclamation-circle" style="color:var(--danger)"></i> Pending Dues</div>
       ${pendingList.length===0?'<div class="empty-state"><i class="fas fa-check-circle" style="color:var(--success)"></i><p>No pending dues!</p></div>':
-      pendingList.slice(0,8).map(p=>`
+      pendingList.slice(0,8).map(p=>{
+        const t = tenants.find(t=>t.id===p.tenantId) || {name:p.tenantName, mobile:'', occupation:''};
+        return `
         <div class="due-item">
           <div>
-            <div style="font-weight:600;font-size:13px">${p.tenantName}</div>
-            <div style="font-size:11px;color:var(--text3)">Room ${p.roomId.replace('R','')} · ${p.month}</div>
+            <div style="font-weight:600;font-size:13px">${t.name} <span style="font-size:11px;color:var(--text3);font-weight:normal">(${t.mobile} - ${t.occupation})</span></div>
+            <div style="font-size:11px;color:var(--text3)">Room ${(p.roomId || '').replace('R','')} · ${p.month}</div>
             <div style="font-size:11px;color:var(--danger)"><i class="fas fa-calendar-times"></i> Due: ${formatDate(p.dueDate)}</div>
           </div>
           <div style="text-align:right">
             <div style="font-size:16px;font-weight:700;color:var(--danger)">₹${p.amount.toLocaleString()}</div>
             <button class="btn btn-success btn-sm" style="margin-top:4px" onclick="recordPayment('${p.id}')"><i class="fas fa-check"></i> Mark Paid</button>
           </div>
-        </div>`).join('')}
+        </div>`}).join('')}
       ${pendingList.length>8?`<p style="text-align:center;font-size:12px;color:var(--text3);margin-top:8px">+${pendingList.length-8} more</p>`:''}
     </div>
 
@@ -90,13 +93,16 @@ function renderFinancePage(){
 
 function renderPaymentTable(list){
   const user = getCurrentUser();
+  const tenants = DB.get('tenants')||[];
   return `<table>
     <thead><tr><th>Tenant</th><th>Room</th><th>Month</th><th>Amount</th><th>Due Date</th><th>Paid On</th><th>Mode</th><th>Status</th><th>Action</th></tr></thead>
     <tbody>
-      ${list.map(p=>`
+      ${list.map(p=>{
+        const t = tenants.find(t=>t.id===p.tenantId) || {name:p.tenantName, mobile:'', occupation:''};
+        return `
         <tr>
-          <td><strong>${p.tenantName}</strong></td>
-          <td>${p.roomId.replace('R','')}</td>
+          <td><strong>${t.name}</strong><br/><span style="font-size:11px;color:var(--text3)">${t.mobile} - ${t.occupation}</span></td>
+          <td>${(p.roomId || '').replace('R','')}</td>
           <td>${p.month}</td>
           <td>₹${p.amount.toLocaleString()}</td>
           <td>${formatDate(p.dueDate)}</td>
@@ -107,7 +113,7 @@ function renderPaymentTable(list){
             (user.role==='tenant'?`<button class="btn btn-primary btn-sm" onclick="triggerTenantPaymentGateway('${p.id}')"><i class="fas fa-lock"></i> Pay Now</button>`:
             `<button class="btn btn-success btn-sm" onclick="recordPayment('${p.id}')"><i class="fas fa-check"></i> Mark Paid</button>`)
             :'<span style="color:var(--text3);font-size:12px">✓ Settled</span>'}</td>
-        </tr>`).join('')}
+        </tr>`; }).join('')}
     </tbody>
   </table>`;
 }
@@ -115,7 +121,9 @@ function renderPaymentTable(list){
 function filterPayments(){
   const month = document.getElementById('pay-month-filter').value;
   const status = document.getElementById('pay-status-filter').value;
-  let payments = DB.get('payments')||[];
+  const tenants = DB.get('tenants')||[];
+  const activeIds = tenants.map(t=>t.id);
+  let payments = (DB.get('payments')||[]).filter(p=>activeIds.includes(p.tenantId));
   if(month) payments = payments.filter(p=>p.month===month);
   if(status) payments = payments.filter(p=>p.status===status);
   document.getElementById('pay-table').innerHTML = renderPaymentTable(payments);
@@ -453,7 +461,7 @@ function addPaymentModal(){
   showModal('Record New Payment',`
     <div class="form-group"><label class="form-label">Tenant *</label>
       <select class="form-control" id="np-tenant">
-        ${tenants.map(t=>`<option value="${t.id}">${t.name} - Room ${t.roomId.replace('R','')} (₹${t.rent.toLocaleString()})</option>`).join('')}
+        ${tenants.map(t=>`<option value="${t.id}">${t.name} - Room ${(t.roomId || '').replace('R','')} (₹${t.rent.toLocaleString()})</option>`).join('')}
       </select>
     </div>
     <div class="form-row">

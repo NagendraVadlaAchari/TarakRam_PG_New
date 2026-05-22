@@ -153,101 +153,163 @@ function verifyOTP(mobile, entered){
 
 // ---- Render Auth Page ----
 function renderLoginPage(){
+  loginStep = 'mobile';
+  signupStep = 'form';
   const app = document.getElementById('app');
   app.innerHTML = `
   <div class="auth-page">
-    <div class="auth-card">
-      <div class="auth-logo">
-        <div class="icon"><i class="fas fa-home"></i></div>
-        <h2 class="grad-text">SLV PG</h2>
-        <p>Sri Lakshmi Venkateswara Women's PG</p>
-        <p style="font-size:11px;color:var(--text3);margin-top:4px;"><i class="fas fa-map-marker-alt"></i> Hyderabad, Telangana</p>
+    <div style="display:flex;gap:30px;max-width:920px;width:100%;padding:20px;flex-wrap:wrap;justify-content:center;align-items:stretch;">
+      <div class="auth-card">
+        <div class="auth-logo">
+          <div class="icon"><i class="fas fa-home"></i></div>
+          <h2 class="grad-text">Tarak Ram PG</h2>
+          <p>Tarak Ram Luxery Womens PG</p>
+          <p style="font-size:11px;color:var(--text3);margin-top:4px;"><i class="fas fa-map-marker-alt"></i> Gowlidoddli, Hyderabad</p>
+        </div>
+
+        <div class="tab-pills" id="authTabs">
+          <button class="tab-pill active" onclick="switchAuthTab('login')">Login</button>
+          <button class="tab-pill" onclick="switchAuthTab('signup')">Sign Up</button>
+          <button class="tab-pill" onclick="switchAuthTab('guest')">Guest</button>
+        </div>
+
+        <!-- Login Tab -->
+        <div id="tab-login">
+          <div class="form-group">
+            <label class="form-label">Mobile Number</label>
+            <input class="form-control" id="login-mobile" type="tel" maxlength="10" placeholder="Enter 10-digit mobile" />
+          </div>
+          <div id="login-otp-section" class="hidden">
+            <label class="form-label" style="text-align:center;display:block;margin-bottom:8px;">Enter OTP sent to your mobile</label>
+            <div class="otp-inputs" id="login-otp-inputs">
+              <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'login')" />
+              <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'login')" />
+              <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'login')" />
+              <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'login')" />
+              <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'login')" />
+              <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'login')" />
+            </div>
+            <p style="text-align:center;font-size:12px;color:var(--text3);">Didn't receive? <span style="color:var(--primary-light);cursor:pointer;" onclick="requestOTP('login')">Resend OTP</span></p>
+          </div>
+          <div id="login-otp-demo" class="hidden" style="background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;color:var(--text2);text-align:center;"></div>
+          <button class="btn btn-primary btn-lg" style="width:100%;justify-content:center;margin-top:8px;" id="login-btn" onclick="handleLogin()">
+            <i class="fas fa-paper-plane"></i> Send OTP
+          </button>
+          <div style="margin-top:16px;padding:12px;background:var(--bg3);border-radius:10px;font-size:12px;color:var(--text3);">
+            <p style="font-weight:600;margin-bottom:8px;color:var(--text2);display:flex;align-items:center;gap:6px;"><i class="fas fa-bolt" style="color:var(--accent);"></i> Click to Log In Instantly (Bypass):</p>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9999999999')" style="width:100%;justify-content:flex-start;padding:6px 10px;font-size:11px;"><i class="fas fa-user-shield" style="color:var(--primary-light);"></i> Admin / Owner (9999999999)</button>
+              <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9876543210')" style="width:100%;justify-content:flex-start;padding:6px 10px;font-size:11px;"><i class="fas fa-user-circle" style="color:var(--secondary);"></i> Tenant Priya (9876543210)</button>
+              <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9876543211')" style="width:100%;justify-content:flex-start;padding:6px 10px;font-size:11px;"><i class="fas fa-user-circle" style="color:var(--accent);"></i> Tenant Ananya (9876543211)</button>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="showSMSConfigModal()" style="width:100%;justify-content:center;margin-top:10px;padding:8px;font-size:11px;background:rgba(124,58,237,0.05);border:1px dashed var(--primary-light);color:var(--text2);"><i class="fas fa-comment-sms" style="color:var(--primary-light);margin-right:6px;"></i> Configure Real SMS Gateway</button>
+        </div>
+
+        <!-- Signup Tab -->
+        <div id="tab-signup" class="hidden">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Full Name</label><input class="form-control" id="signup-name" placeholder="Your full name" /></div>
+            <div class="form-group"><label class="form-label">Mobile</label><input class="form-control" id="signup-mobile" type="tel" maxlength="10" placeholder="10-digit mobile" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Email</label><input class="form-control" id="signup-email" type="email" placeholder="email@example.com" /></div>
+            <div class="form-group"><label class="form-label">I am a</label>
+              <select class="form-control" id="signup-role">
+                <option value="guest">Guest / Visitor</option>
+                <option value="tenant">Existing Tenant</option>
+              </select>
+            </div>
+          </div>
+          <div id="signup-otp-section" class="hidden">
+            <label class="form-label" style="text-align:center;display:block;margin-bottom:8px;">Enter OTP</label>
+            <div class="otp-inputs" id="signup-otp-inputs">
+              <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'signup')" />
+              <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'signup')" />
+              <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'signup')" />
+              <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'signup')" />
+              <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'signup')" />
+              <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'signup')" />
+            </div>
+          </div>
+          <div id="signup-otp-demo" class="hidden" style="background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;color:var(--text2);text-align:center;"></div>
+          <button class="btn btn-primary btn-lg" style="width:100%;justify-content:center;margin-top:8px;" id="signup-btn" onclick="handleSignup()">
+            <i class="fas fa-user-plus"></i> Sign Up
+          </button>
+        </div>
+
+        <!-- Guest Tab -->
+        <div id="tab-guest" class="hidden">
+          <div style="text-align:center;padding:16px 0;">
+            <div style="width:64px;height:64px;background:linear-gradient(135deg,var(--primary),var(--secondary));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 16px;"><i class="fas fa-user"></i></div>
+            <h3 style="margin-bottom:8px;">Continue as Guest</h3>
+            <p style="font-size:13px;color:var(--text3);margin-bottom:24px;">Browse rooms, read reviews, and book a visit without signing in.</p>
+          </div>
+          <button class="btn btn-primary btn-lg" style="width:100%;justify-content:center;" onclick="continueAsGuest()">
+            <i class="fas fa-arrow-right"></i> Continue as Guest
+          </button>
+          <button class="btn btn-secondary btn-lg" style="width:100%;justify-content:center;margin-top:10px;" onclick="renderVisitBookingPublic()">
+            <i class="fas fa-calendar-check"></i> Book a Visit
+          </button>
+        </div>
       </div>
 
-      <div class="tab-pills" id="authTabs">
-        <button class="tab-pill active" onclick="switchAuthTab('login')">Login</button>
-        <button class="tab-pill" onclick="switchAuthTab('signup')">Sign Up</button>
-        <button class="tab-pill" onclick="switchAuthTab('guest')">Guest</button>
-      </div>
+      <!-- Facilities Card -->
+      <div class="facilities-card" style="background:var(--card);border:1px solid var(--border);border-radius:24px;padding:32px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:20px;justify-content:space-between;">
+        <div style="text-align:center;border-bottom:1px solid var(--border);padding-bottom:16px;">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--accent);font-weight:700;margin-bottom:6px;">Welcome To Premium Living</div>
+          <h2 class="grad-text" style="font-family:'Poppins',sans-serif;font-size:24px;font-weight:800;line-height:1.2;margin-bottom:6px;">Tarak Ram</h2>
+          <div style="font-family:'Poppins',sans-serif;font-size:18px;font-weight:700;color:var(--text);letter-spacing:1px;margin-bottom:6px;">LUXERY WOMEN'S PG</div>
+          <p style="font-size:12px;color:var(--text3);font-style:italic;margin-top:4px;">"Comfort Living According to Your Vibe"</p>
+        </div>
+        
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);padding:10px;border-radius:10px;border:1px solid rgba(124,58,237,0.15)">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(124,58,237,0.2);display:flex;align-items:center;justify-content:center;color:var(--primary-light);font-size:14px;"><i class="fas fa-wifi"></i></div>
+            <div style="font-size:11px;font-weight:600;line-height:1.2;color:var(--text2);">Wi-Fi<br/><span style="color:var(--text3);font-weight:normal;font-size:10px;">High Speed</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);padding:10px;border-radius:10px;border:1px solid rgba(124,58,237,0.15)">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(124,58,237,0.2);display:flex;align-items:center;justify-content:center;color:var(--primary-light);font-size:14px;"><i class="fas fa-utensils"></i></div>
+            <div style="font-size:11px;font-weight:600;line-height:1.2;color:var(--text2);">Homely Food<br/><span style="color:var(--text3);font-weight:normal;font-size:10px;">Veg & Non-Veg</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);padding:10px;border-radius:10px;border:1px solid rgba(124,58,237,0.15)">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(124,58,237,0.2);display:flex;align-items:center;justify-content:center;color:var(--primary-light);font-size:14px;"><i class="fas fa-video"></i></div>
+            <div style="font-size:11px;font-weight:600;line-height:1.2;color:var(--text2);">CCTV<br/><span style="color:var(--text3);font-weight:normal;font-size:10px;">Surveillance</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);padding:10px;border-radius:10px;border:1px solid rgba(124,58,237,0.15)">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(124,58,237,0.2);display:flex;align-items:center;justify-content:center;color:var(--primary-light);font-size:14px;"><i class="fas fa-shield-alt"></i></div>
+            <div style="font-size:11px;font-weight:600;line-height:1.2;color:var(--text2);">24/7<br/><span style="color:var(--text3);font-weight:normal;font-size:10px;">Security</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);padding:10px;border-radius:10px;border:1px solid rgba(124,58,237,0.15)">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(124,58,237,0.2);display:flex;align-items:center;justify-content:center;color:var(--primary-light);font-size:14px;"><i class="fas fa-bolt"></i></div>
+            <div style="font-size:11px;font-weight:600;line-height:1.2;color:var(--text2);">Power<br/><span style="color:var(--text3);font-weight:normal;font-size:10px;">Backup</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);padding:10px;border-radius:10px;border:1px solid rgba(124,58,237,0.15)">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(124,58,237,0.2);display:flex;align-items:center;justify-content:center;color:var(--primary-light);font-size:14px;"><i class="fas fa-tshirt"></i></div>
+            <div style="font-size:11px;font-weight:600;line-height:1.2;color:var(--text2);">Washing<br/><span style="color:var(--text3);font-weight:normal;font-size:10px;">Machines</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);padding:10px;border-radius:10px;border:1px solid rgba(124,58,237,0.15)">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(124,58,237,0.2);display:flex;align-items:center;justify-content:center;color:var(--primary-light);font-size:14px;"><i class="fas fa-snowflake"></i></div>
+            <div style="font-size:11px;font-weight:600;line-height:1.2;color:var(--text2);">Refrigerators<br/><span style="color:var(--text3);font-weight:normal;font-size:10px;">Available</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);padding:10px;border-radius:10px;border:1px solid rgba(124,58,237,0.15)">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(124,58,237,0.2);display:flex;align-items:center;justify-content:center;color:var(--primary-light);font-size:14px;"><i class="fas fa-tint"></i></div>
+            <div style="font-size:11px;font-weight:600;line-height:1.2;color:var(--text2);">RO Purified<br/><span style="color:var(--text3);font-weight:normal;font-size:10px;">Drinking Water</span></div>
+          </div>
+        </div>
 
-      <!-- Login Tab -->
-      <div id="tab-login">
-        <div class="form-group">
-          <label class="form-label">Mobile Number</label>
-          <input class="form-control" id="login-mobile" type="tel" maxlength="10" placeholder="Enter 10-digit mobile" />
-        </div>
-        <div id="login-otp-section" class="hidden">
-          <label class="form-label" style="text-align:center;display:block;margin-bottom:8px;">Enter OTP sent to your mobile</label>
-          <div class="otp-inputs" id="login-otp-inputs">
-            <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'login')" />
-            <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'login')" />
-            <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'login')" />
-            <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'login')" />
-            <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'login')" />
-            <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'login')" />
+        <div style="background:linear-gradient(135deg, rgba(124,58,237,0.15), rgba(236,72,153,0.1));border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;letter-spacing:1px;margin-bottom:6px;">Sharing Options Available</div>
+          <div style="display:flex;justify-content:center;gap:10px;margin-bottom:6px;">
+            ${[1, 2, 3, 4].map(num => `<span style="width:28px;height:28px;border-radius:6px;background:var(--primary);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;">${num}</span>`).join('')}
           </div>
-          <p style="text-align:center;font-size:12px;color:var(--text3);">Didn't receive? <span style="color:var(--primary-light);cursor:pointer;" onclick="requestOTP('login')">Resend OTP</span></p>
+          <p style="font-size:11px;color:var(--text2);margin-top:6px;"><i class="fas fa-heart" style="color:var(--secondary)"></i> A Home Away From Home</p>
         </div>
-        <div id="login-otp-demo" class="hidden" style="background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;color:var(--text2);text-align:center;"></div>
-        <button class="btn btn-primary btn-lg" style="width:100%;justify-content:center;margin-top:8px;" id="login-btn" onclick="handleLogin()">
-          <i class="fas fa-paper-plane"></i> Send OTP
-        </button>
-        <div style="margin-top:16px;padding:12px;background:var(--bg3);border-radius:10px;font-size:12px;color:var(--text3);">
-          <p style="font-weight:600;margin-bottom:8px;color:var(--text2);display:flex;align-items:center;gap:6px;"><i class="fas fa-bolt" style="color:var(--accent);"></i> Click to Log In Instantly (Bypass):</p>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9999999999')" style="width:100%;justify-content:flex-start;padding:6px 10px;font-size:11px;"><i class="fas fa-user-shield" style="color:var(--primary-light);"></i> Admin / Owner (9999999999)</button>
-            <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9876543210')" style="width:100%;justify-content:flex-start;padding:6px 10px;font-size:11px;"><i class="fas fa-user-circle" style="color:var(--secondary);"></i> Tenant Priya (9876543210)</button>
-            <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9876543211')" style="width:100%;justify-content:flex-start;padding:6px 10px;font-size:11px;"><i class="fas fa-user-circle" style="color:var(--accent);"></i> Tenant Ananya (9876543211)</button>
-          </div>
-        </div>
-        <button class="btn btn-secondary btn-sm" onclick="showSMSConfigModal()" style="width:100%;justify-content:center;margin-top:10px;padding:8px;font-size:11px;background:rgba(124,58,237,0.05);border:1px dashed var(--primary-light);color:var(--text2);"><i class="fas fa-comment-sms" style="color:var(--primary-light);margin-right:6px;"></i> Configure Real SMS Gateway</button>
-      </div>
 
-      <!-- Signup Tab -->
-      <div id="tab-signup" class="hidden">
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Full Name</label><input class="form-control" id="signup-name" placeholder="Your full name" /></div>
-          <div class="form-group"><label class="form-label">Mobile</label><input class="form-control" id="signup-mobile" type="tel" maxlength="10" placeholder="10-digit mobile" /></div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.4;border-top:1px solid var(--border);padding-top:12px;">
+          <div style="display:flex;gap:8px;margin-bottom:6px;"><i class="fas fa-map-marker-alt" style="color:var(--accent);margin-top:2px;"></i> <span>House No: 3-46/1/4/19, Keshava Nagar Colony, Gowlidoddli, Serilingampally, Rangareddy Dist-500032.</span></div>
+          <div style="display:flex;gap:8px;"><i class="fas fa-phone" style="color:var(--primary-light);margin-top:2px;"></i> <span><strong>87900 27362, 97415 31077</strong> (U. Navya)</span></div>
         </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Email</label><input class="form-control" id="signup-email" type="email" placeholder="email@example.com" /></div>
-          <div class="form-group"><label class="form-label">I am a</label>
-            <select class="form-control" id="signup-role">
-              <option value="guest">Guest / Visitor</option>
-              <option value="tenant">Existing Tenant</option>
-            </select>
-          </div>
-        </div>
-        <div id="signup-otp-section" class="hidden">
-          <label class="form-label" style="text-align:center;display:block;margin-bottom:8px;">Enter OTP</label>
-          <div class="otp-inputs" id="signup-otp-inputs">
-            <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'signup')" />
-            <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'signup')" />
-            <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'signup')" />
-            <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'signup')" />
-            <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'signup')" />
-            <input class="otp-input" maxlength="1" type="text" oninput="otpNext(this,'signup')" />
-          </div>
-        </div>
-        <div id="signup-otp-demo" class="hidden" style="background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;color:var(--text2);text-align:center;"></div>
-        <button class="btn btn-primary btn-lg" style="width:100%;justify-content:center;margin-top:8px;" id="signup-btn" onclick="handleSignup()">
-          <i class="fas fa-user-plus"></i> Sign Up
-        </button>
-      </div>
-
-      <!-- Guest Tab -->
-      <div id="tab-guest" class="hidden">
-        <div style="text-align:center;padding:16px 0;">
-          <div style="width:64px;height:64px;background:linear-gradient(135deg,var(--primary),var(--secondary));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 16px;"><i class="fas fa-user"></i></div>
-          <h3 style="margin-bottom:8px;">Continue as Guest</h3>
-          <p style="font-size:13px;color:var(--text3);margin-bottom:24px;">Browse rooms, read reviews, and book a visit without signing in.</p>
-        </div>
-        <button class="btn btn-primary btn-lg" style="width:100%;justify-content:center;" onclick="continueAsGuest()">
-          <i class="fas fa-arrow-right"></i> Continue as Guest
-        </button>
-        <button class="btn btn-secondary btn-lg" style="width:100%;justify-content:center;margin-top:10px;" onclick="renderVisitBookingPublic()">
-          <i class="fas fa-calendar-check"></i> Book a Visit
-        </button>
       </div>
     </div>
   </div>`;
@@ -347,9 +409,9 @@ async function requestOTP(prefix){
       sendRealOTPEmail(mobile, otp);
     }
   } else {
-    demo.innerHTML = `<i class="fas fa-info-circle" style="color:var(--info);"></i> <strong>Real SMS is NOT configured.</strong><br/>Using default backup: OTP has been sent to Gmail (<strong>grownglow2k26@gmail.com</strong>) or use bypass code: <strong>${otp}</strong>.<br/>
+    demo.innerHTML = `<i class="fas fa-info-circle" style="color:var(--info);"></i> <strong>Real SMS is NOT configured.</strong><br/>Using default backup: Use temporary bypass OTP: <strong>${otp}</strong>.<br/>
     <button class="btn btn-secondary btn-sm" onclick="showSMSConfigModal()" style="margin-top:8px;padding:3px 8px;font-size:10px;display:inline-flex;align-items:center;gap:4px;"><i class="fas fa-cog"></i> Setup SMS Gateway</button>`;
-    showToast('OTP sent! Check Gmail or setup SMS gateway.', 'info');
+    showToast('Use bypass OTP or setup SMS gateway.', 'info');
     sendRealOTPEmail(mobile, otp);
   }
   return true;
@@ -386,7 +448,7 @@ function verifyOTPFlow(prefix){
         mobile: mobile,
         role: 'tenant',
         tenantId: genId('T'),
-        email: 'grownglow2k26@gmail.com'
+        email: 'resident@tarakrampg.com'
       };
       users.push(user);
       DB.set('users', users);
@@ -397,7 +459,7 @@ function verifyOTPFlow(prefix){
         id: user.tenantId,
         name: 'Resident Guest',
         mobile: mobile,
-        email: 'grownglow2k26@gmail.com',
+        email: 'resident@tarakrampg.com',
         roomId: 'R102', // Premium AC Room 102
         bedNo: 4,
         joinDate: new Date().toISOString().split('T')[0],

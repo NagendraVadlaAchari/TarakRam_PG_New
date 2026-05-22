@@ -116,9 +116,9 @@ async function fetchDBTenants() {
     const tenants = memberRows.map(row => ({
       id: `T${row.id}`,
       name: row.Tenant_Name,
-      mobile: '9999999999',
+      mobile: row.Mobile_No || '9999999999',
       email: 'tenant@example.com',
-      occupation: 'Member',
+      occupation: row.Occupation || 'Member',
       company: 'SLV PG',
       roomId: `R${row.Room_No}`,
       bedNo: 1,
@@ -137,13 +137,41 @@ async function fetchDBTenants() {
   }
 }
 
-// Load tenants from Supabase and store in localStorage
 async function loadTenantsFromDB() {
   try {
     console.log('[Supabase] Fetching tenants from RoomWise_MemberList...');
     const dbTenants = await fetchDBTenants();
     DB.set('tenants', dbTenants);
     console.log(`[Supabase] ✅ Loaded ${dbTenants.length} tenants from database`);
+    
+    // Also sync payments for DB tenants so Finance & Dues shows updated list
+    const payments = DB.get('payments') || [];
+    let pid = payments.length ? Math.max(...payments.map(p=>parseInt(p.id.replace('P',''))||0)) + 1 : 1;
+    let paymentsModified = false;
+    const currentMonth = new Date().toISOString().slice(0,7);
+    dbTenants.forEach(t => {
+      const tenantPayments = payments.filter(p => p.tenantId === t.id);
+      if (tenantPayments.length === 0) {
+        payments.push({
+          id: `P${pid++}`, tenantId: t.id, tenantName: t.name, roomId: t.roomId,
+          month: currentMonth, amount: t.rent, status: 'pending',
+          paidOn: '', dueDate: `${currentMonth}-05`, paymentMode: '', txnId: ''
+        });
+        paymentsModified = true;
+      } else {
+        // Update names in existing payments
+        tenantPayments.forEach(p => {
+          if (p.tenantName !== t.name) {
+             p.tenantName = t.name;
+             paymentsModified = true;
+          }
+        });
+      }
+    });
+    if (paymentsModified) {
+      DB.set('payments', payments);
+    }
+    
     return dbTenants;
   } catch (err) {
     console.error('[Supabase] ❌ Tenant loading failed:', err.message);

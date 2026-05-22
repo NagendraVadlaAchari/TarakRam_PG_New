@@ -21,19 +21,22 @@ async function initApp(){
 
 function renderApp(){
   const user = getCurrentUser();
+  if (user && user.role === 'guest' && currentPage === 'dashboard') {
+    currentPage = 'rooms';
+  }
   const app = document.getElementById('app');
   const unread = getUnreadCount();
 
-  const isGuest = user.role === 'guest';
+  const isGuest = user ? user.role === 'guest' : true;
 
   const navItems = isGuest ? [
-    {id:'rooms',icon:'building',label:'Rooms'},
+    {id:'rooms',icon:'building',label:'Rooms & Occupancy'},
     {id:'booking',icon:'key',label:'Book Room'},
     {id:'reviews',icon:'star',label:'Reviews'},
     {id:'visit',icon:'calendar-check',label:'Book Visit'},
   ] : user.role === 'admin' ? [
     {id:'dashboard',icon:'tachometer-alt',label:'Dashboard'},
-    {id:'rooms',icon:'building',label:'Rooms'},
+    {id:'rooms',icon:'building',label:'Rooms & Occupancy'},
     {id:'tenants',icon:'users',label:'Tenants'},
     {id:'finance',icon:'rupee-sign',label:'Finance'},
     {id:'rent',icon:'money-bill-wave',label:'Rent Collection'},
@@ -43,6 +46,7 @@ function renderApp(){
     {id:'visit',icon:'calendar-check',label:'Visit Bookings'},
   ] : [
     {id:'dashboard',icon:'tachometer-alt',label:'My Dashboard'},
+    {id:'rooms',icon:'building',label:'Rooms & Occupancy'},
     {id:'tenants',icon:'user-circle',label:'My Profile'},
     {id:'finance',icon:'rupee-sign',label:'My Finances'},
     {id:'documents',icon:'folder-open',label:'My Documents'},
@@ -57,8 +61,8 @@ function renderApp(){
       <div class="sidebar-logo">
         <div class="logo-icon"><i class="fas fa-home"></i></div>
         <div class="logo-text">
-          <h3>SLV PG</h3>
-          <p>Women's PG, Hyderabad</p>
+          <h3>Tarak Ram PG</h3>
+          <p>Luxery Womens PG</p>
         </div>
       </div>
     </div>
@@ -140,8 +144,9 @@ function toggleSidebar(){
 // ---- Admin Dashboard ----
 function renderAdminDashboard(){
   const tenants = (DB.get('tenants')||[]).filter(t=>t.status==='active');
+  const activeIds = tenants.map(t=>t.id);
+  const payments = (DB.get('payments')||[]).filter(p=>activeIds.includes(p.tenantId));
   const rooms = getRoomOccupancy();
-  const payments = DB.get('payments')||[];
   const currentMonth = new Date().toISOString().slice(0,7);
   const mPayments = payments.filter(p=>p.month===currentMonth);
   const collected = mPayments.filter(p=>p.status==='paid').reduce((s,p)=>s+p.amount,0);
@@ -221,11 +226,13 @@ function renderAdminDashboard(){
       <div class="card" style="margin-bottom:16px">
         <div class="card-title"><i class="fas fa-exclamation-circle" style="color:var(--danger)"></i> Pending Dues</div>
         ${pending.length===0?'<div style="text-align:center;padding:16px;color:var(--success)"><i class="fas fa-check-circle"></i> All collected!</div>':
-        pending.slice(0,5).map(p=>`
+        pending.slice(0,5).map(p=>{
+          const t = tenants.find(t=>t.id===p.tenantId) || {name:p.tenantName, mobile:'', occupation:''};
+          return `
           <div class="due-item">
-            <div><strong style="font-size:13px">${p.tenantName}</strong><div style="font-size:11px;color:var(--text3)">Room ${p.roomId.replace('R','')} · Due: ${formatDate(p.dueDate)}</div></div>
+            <div><strong style="font-size:13px">${t.name}</strong> <span style="font-size:11px;color:var(--text3);font-weight:normal">(${t.mobile} - ${t.occupation})</span><div style="font-size:11px;color:var(--text3)">Room ${(p.roomId || '').replace('R','')} · Due: ${formatDate(p.dueDate)}</div></div>
             <div style="text-align:right"><div style="font-weight:700;color:var(--danger)">₹${p.amount.toLocaleString()}</div><button class="btn btn-success btn-sm" style="margin-top:4px" onclick="recordPayment('${p.id}')">Pay</button></div>
-          </div>`).join('')}
+          </div>`}).join('')}
         ${pending.length>5?`<p style="font-size:12px;color:var(--text3);text-align:center;margin-top:8px;cursor:pointer" onclick="navigateTo('finance')">+${pending.length-5} more →</p>`:''}
       </div>
 
@@ -256,7 +263,7 @@ function renderAdminDashboard(){
             return `<tr onclick="showTenantDetail('${t.id}')" style="cursor:pointer">
               <td><span class="badge badge-purple">${t.id}</span></td>
               <td><strong>${t.name}</strong></td>
-              <td>Room ${t.roomId.replace('R','')} · Bed ${t.bedNo}</td>
+              <td>Room ${(t.roomId || '').replace('R','')} · Bed ${t.bedNo}</td>
               <td>₹${t.rent.toLocaleString()}</td>
               <td>${formatDate(t.joinDate)}</td>
               <td><span class="badge ${p&&p.status==='paid'?'badge-success':'badge-danger'}">${p?p.status:'no record'}</span></td>
@@ -282,7 +289,7 @@ function renderTenantDashboard(){
   return `
   <div class="page-header">
     <h1>Welcome, <span class="grad-text">${t.name.split(' ')[0]}</span> 👋</h1>
-    <p>Tenant ID: ${t.id} · Room ${t.roomId.replace('R','')} · Bed ${t.bedNo}</p>
+    <p>Tenant ID: ${t.id} · Room ${(t.roomId || '').replace('R','')} · Bed ${t.bedNo}</p>
   </div>
 
   <div class="stats-grid">
@@ -335,7 +342,8 @@ function renderRentCollection(){
   const user = getCurrentUser();
   const currentMonth = new Date().toISOString().slice(0,7);
   const tenants = (DB.get('tenants')||[]).filter(t=>t.status==='active');
-  const payments = DB.get('payments')||[];
+  const activeIds = tenants.map(t=>t.id);
+  const payments = (DB.get('payments')||[]).filter(p=>activeIds.includes(p.tenantId));
 
   const months=['2026-05','2026-04','2026-03','2026-02','2026-01'];
 
@@ -379,8 +387,8 @@ function renderRCTable(month, tenants, payments){
         ${tenants.map(t=>{
           const p=payments.find(p=>p.tenantId===t.id&&p.month===month);
           return `<tr>
-            <td><strong>${t.name}</strong><div style="font-size:11px;color:var(--text3)">${t.id}</div></td>
-            <td>Room ${t.roomId.replace('R','')} · Bed ${t.bedNo}</td>
+            <td><strong>${t.name}</strong><div style="font-size:11px;color:var(--text3)">${t.mobile} - ${t.occupation}</div></td>
+            <td>Room ${(t.roomId || '').replace('R','')} · Bed ${t.bedNo}</td>
             <td>₹${t.rent.toLocaleString()}</td>
             <td><span class="badge ${p&&p.status==='paid'?'badge-success':'badge-danger'}">${p?p.status:'not recorded'}</span></td>
             <td>${p&&p.paidOn||'—'}</td>
@@ -396,7 +404,8 @@ function renderRCTable(month, tenants, payments){
 function renderRentCollectionTable(){
   const month = document.getElementById('rc-month').value;
   const tenants = (DB.get('tenants')||[]).filter(t=>t.status==='active');
-  const payments = DB.get('payments')||[];
+  const activeIds = tenants.map(t=>t.id);
+  const payments = (DB.get('payments')||[]).filter(p=>activeIds.includes(p.tenantId));
   document.getElementById('rc-table-wrap').innerHTML = renderRCTable(month, tenants, payments);
 }
 
