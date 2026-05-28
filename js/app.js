@@ -16,8 +16,10 @@ async function initApp(){
   } catch (err) {
     console.error("Failed to load data on boot", err);
   }
-  document.getElementById('page-loader').classList.add('fade-out');
-  setTimeout(renderApp, 500);
+  // page-loader may have been removed from DOM if login page was shown
+  const loader = document.getElementById('page-loader');
+  if (loader) loader.classList.add('fade-out');
+  setTimeout(renderApp, 300);
 }
 
 function renderApp(){
@@ -58,7 +60,7 @@ function renderApp(){
   app.innerHTML = `
   <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-logo">
+      <div class="sidebar-logo" onclick="navigateTo('dashboard')" style="cursor:pointer" title="Go to Dashboard">
         <div class="logo-icon"><i class="fas fa-home"></i></div>
         <div class="logo-text">
           <h3>Tarak Ram PG</h3>
@@ -69,7 +71,7 @@ function renderApp(){
     <nav class="sidebar-nav">
       <div class="nav-section">
         ${navItems.map(n=>`
-          <button class="nav-item ${currentPage===n.id?'active':''}" onclick="navigateTo('${n.id}')">
+          <button class="nav-item ${currentPage===n.id?'active':''}" onclick="navigateTo('${n.id}');closeSidebar()">
             <i class="fas fa-${n.icon}"></i> ${n.label}
             ${n.badge?`<span class="nav-badge">${n.badge}</span>`:''}
           </button>`).join('')}
@@ -109,11 +111,7 @@ function renderApp(){
       <i class="fas fa-chevron-up toggle-icon" id="demo-toggle-icon"></i>
     </div>
     <div class="demo-switcher-body hidden" id="demo-switcher-body">
-      <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9999999999');navigateTo('dashboard');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user-shield" style="color:var(--primary-light);"></i> Admin / Owner</button>
-      <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9876543210');navigateTo('dashboard');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user-circle" style="color:var(--secondary);"></i> Tenant (Priya)</button>
-      <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9876543211');navigateTo('dashboard');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user-circle" style="color:var(--accent);"></i> Tenant (Ananya)</button>
       <button class="btn btn-secondary btn-sm" onclick="continueAsGuest();navigateTo('booking');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user" style="color:var(--info);"></i> Guest View</button>
-      <button class="btn btn-secondary btn-sm" onclick="showSMSConfigModal()" style="margin-bottom:6px;width:100%;justify-content:flex-start;background:rgba(124,58,237,0.08);border:1px dashed var(--primary-light);"><i class="fas fa-comment-sms" style="color:var(--primary-light);"></i> SMS Setup Gateway</button>
       <button class="btn btn-danger btn-sm" onclick="logoutUser()" style="width:100%;justify-content:center;"><i class="fas fa-sign-out-alt"></i> Logout / Clear Session</button>
     </div>
   </div>
@@ -139,6 +137,11 @@ function renderPage(page){
 
 function toggleSidebar(){
   document.getElementById('sidebar').classList.toggle('open');
+}
+
+function closeSidebar(){
+  const sb = document.getElementById('sidebar');
+  if(sb) sb.classList.remove('open');
 }
 
 // ---- Admin Dashboard ----
@@ -246,7 +249,6 @@ function renderAdminDashboard(){
           <button class="btn btn-secondary" onclick="navigateTo('documents')"><i class="fas fa-folder-open"></i> Documents</button>
           <button class="btn btn-secondary" onclick="navigateTo('visit')"><i class="fas fa-calendar"></i> Visits (${visits.length})</button>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="showSMSConfigModal()" style="width:100%;justify-content:center;margin-top:8px;background:rgba(124,58,237,0.05);border:1px dashed var(--primary-light);color:var(--text2);padding:6px;font-size:12px;"><i class="fas fa-comment-sms" style="color:var(--primary-light);margin-right:6px;"></i> SMS Gateway Setup</button>
         ${pendingReviews.length?`<div style="margin-top:12px;padding:10px;background:rgba(245,158,11,.1);border-radius:8px;cursor:pointer" onclick="navigateTo('reviews')"><p style="font-size:13px;color:var(--accent)"><i class="fas fa-star"></i> ${pendingReviews.length} review(s) awaiting approval</p></div>`:''}
       </div>
     </div>
