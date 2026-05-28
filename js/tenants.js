@@ -252,6 +252,15 @@ function saveTenant(){
     DB.set('users',users);
   }
 
+  // Save to PostgreSQL RoomWise_MemberList
+  const allRooms = getRoomOccupancy();
+  const selRoom = allRooms.find(r=>r.id===roomId);
+  const floorNo = selRoom ? selRoom.floor : 1;
+  const roomNo = roomId.replace('R','');
+  saveNewTenantToDB(name, mobile, occ||'Member', joinDate, roomNo, String(floorNo))
+    .then(()=>{ console.log('[DB] ✅ Tenant saved to RoomWise_MemberList'); })
+    .catch(err=>{ console.error('[DB] ❌ Failed to save tenant to DB:', err.message); showToast('Tenant saved locally, DB sync failed: '+err.message,'warning'); });
+
   addNotification({to:'admin',type:'join',title:'New Tenant Added',message:`${name} has been added to Room ${roomId.replace('R','')} Bed ${bedNo}.`});
   closeModal();
   showToast('Tenant added successfully!','success');
@@ -269,7 +278,88 @@ function vacateTenant(id){
   navigateTo('tenants');
 }
 
-function editTenant(id){ closeModal(); showToast('Edit feature coming soon!','info'); }
+function editTenant(id){
+  const tenants = DB.get('tenants')||[];
+  const t = tenants.find(t=>t.id===id);
+  if(!t) return;
+  closeModal();
+  setTimeout(()=>{
+    showModal(`Edit Tenant — ${t.name}`,`
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Full Name *</label><input class="form-control" id="et-name" value="${t.name}" placeholder="Tenant full name" /></div>
+        <div class="form-group"><label class="form-label">Mobile *</label><input class="form-control" id="et-mobile" type="tel" maxlength="10" value="${t.mobile}" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Email</label><input class="form-control" id="et-email" type="email" value="${t.email||''}" /></div>
+        <div class="form-group"><label class="form-label">Date of Birth</label><input class="form-control" id="et-dob" type="date" value="${t.dob||''}" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Occupation</label><input class="form-control" id="et-occ" value="${t.occupation||''}" /></div>
+        <div class="form-group"><label class="form-label">Company / College</label><input class="form-control" id="et-comp" value="${t.company||''}" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Join Date</label><input class="form-control" id="et-join" type="date" value="${t.joinDate||''}" /></div>
+        <div class="form-group"><label class="form-label">Monthly Rent (₹)</label><input class="form-control" id="et-rent" type="number" value="${t.rent||''}" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Security Deposit (₹)</label><input class="form-control" id="et-dep" type="number" value="${t.deposit||''}" /></div>
+        <div class="form-group"><label class="form-label">Notice Period (days)</label><input class="form-control" id="et-notice" type="number" value="${t.noticePeriod||30}" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">ID Proof Type</label>
+          <select class="form-control" id="et-idtype">
+            ${['Aadhar','Passport','Voter ID','DL','PAN Card'].map(p=>`<option value="${p}" ${t.idProof===p?'selected':''}>${p}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">ID Number</label><input class="form-control" id="et-idnum" value="${t.idNumber||''}" /></div>
+      </div>
+      <div class="form-group"><label class="form-label">Emergency Contact</label><input class="form-control" id="et-emerg" value="${t.emergencyContact||''}" placeholder="Name & mobile" /></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveEditedTenant('${t.id}')"><i class="fas fa-save"></i> Save Changes</button>
+      </div>
+    `,false);
+  },200);
+}
+
+function saveEditedTenant(id){
+  const name = document.getElementById('et-name').value.trim();
+  const mobile = document.getElementById('et-mobile').value.trim();
+  const email = document.getElementById('et-email').value.trim();
+  const dob = document.getElementById('et-dob').value;
+  const occ = document.getElementById('et-occ').value.trim();
+  const comp = document.getElementById('et-comp').value.trim();
+  const joinDate = document.getElementById('et-join').value;
+  const rent = parseInt(document.getElementById('et-rent').value)||0;
+  const deposit = parseInt(document.getElementById('et-dep').value)||0;
+  const noticePeriod = parseInt(document.getElementById('et-notice').value)||30;
+  const idProof = document.getElementById('et-idtype').value;
+  const idNumber = document.getElementById('et-idnum').value.trim();
+  const emergencyContact = document.getElementById('et-emerg').value.trim();
+
+  if(!name||!mobile){ showToast('Name and Mobile are required','error'); return; }
+
+  const tenants = DB.get('tenants')||[];
+  const t = tenants.find(t=>t.id===id);
+  if(!t){ showToast('Tenant not found','error'); return; }
+
+  // Update in localStorage
+  Object.assign(t,{name,mobile,email,dob,occupation:occ,company:comp,joinDate,rent,deposit,noticePeriod,idProof,idNumber,emergencyContact});
+  DB.set('tenants',tenants);
+
+  // Update in PostgreSQL
+  const roomNo = t.roomId ? t.roomId.replace('R','') : '';
+  const allRooms = getRoomOccupancy();
+  const selRoom = allRooms.find(r=>r.id===t.roomId);
+  const floorNo = selRoom ? selRoom.floor : '';
+  updateTenantInDB(t.db_id, name, mobile, occ||'Member', joinDate, roomNo, String(floorNo))
+    .then(()=>{ console.log('[DB] ✅ Tenant updated in RoomWise_MemberList'); })
+    .catch(err=>{ console.error('[DB] ❌ Failed to update tenant in DB:', err.message); showToast('Saved locally, DB sync failed: '+err.message,'warning'); });
+
+  closeModal();
+  showToast('Tenant updated successfully!','success');
+  navigateTo('tenants');
+}
 
 function exportTenants(){
   const tenants=DB.get('tenants')||[];

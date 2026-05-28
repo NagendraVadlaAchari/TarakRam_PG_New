@@ -91,7 +91,7 @@ function renderRoomsPage(){
 
     <div class="card">
       <div class="card-title"><i class="fas fa-list"></i> Room Details <span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:6px">(from TarakRam_RoomDetails)</span></div>
-      <div class="table-wrap">
+      <div class="table-wrap" style="max-height: 400px; overflow-y: auto;">
         <table>
           <thead><tr><th>Room</th><th>Floor</th><th>Type</th><th>Beds</th><th>Occupied</th><th>Rent/Bed</th><th>Status</th></tr></thead>
           <tbody>
@@ -150,6 +150,15 @@ function showRoomDetail(roomId){
   const user = getCurrentUser();
   const isGuest = user.role === 'guest';
 
+  const footerBtn = user.role === 'admin'
+    ? `<div class="modal-footer" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+        <button class="btn btn-primary" onclick="showEditRoomModal('${room.id}')"><i class="fas fa-edit"></i> Edit Room</button>
+       </div>`
+    : `<div class="modal-footer" style="margin-top:16px;display:flex;justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+       </div>`;
+
   showModal(`Room ${room.number} Details`, `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
       <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--primary-light)">${room.floor}</div><div style="font-size:12px;color:var(--text3)">Floor</div></div>
@@ -169,7 +178,67 @@ function showRoomDetail(roomId){
         ${action}
       </div>`;
     }).join('')}
-  `);
+    ${footerBtn}
+  `, false);
+}
+
+function showEditRoomModal(roomId){
+  const rooms = getRoomOccupancy();
+  const room = rooms.find(r=>r.id===roomId);
+  if(!room) return;
+
+  showModal(`Edit Room ${room.number}`,`
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Room Number</label><input class="form-control" id="mre-num" value="${room.number}" /></div>
+      <div class="form-group"><label class="form-label">Floor</label><input class="form-control" id="mre-floor" type="number" min="1" max="20" value="${room.floor}" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">No. of Beds</label><input class="form-control" id="mre-beds" type="number" min="1" max="10" value="${room.beds}" /></div>
+      <div class="form-group"><label class="form-label">Type</label><select class="form-control" id="mre-type"><option ${room.type==='AC'?'selected':''}>AC</option><option ${room.type==='Non-AC'?'selected':''}>Non-AC</option></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Rent per Bed (₹)</label><input class="form-control" id="mre-rent" type="number" value="${room.rent}" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="showRoomDetail('${roomId}')">Back</button>
+      <button class="btn btn-success" onclick="updateRoom('${roomId}')"><i class="fas fa-save"></i> Save Changes</button>
+    </div>`,false);
+}
+
+async function updateRoom(roomId){
+  const rooms = DB.get('rooms') || [];
+  const room = rooms.find(r => r.id === roomId);
+  if (!room) return;
+
+  const originalRoomNo = room.number;
+  const num = document.getElementById('mre-num').value.trim();
+  const floor = parseInt(document.getElementById('mre-floor').value);
+  const beds = parseInt(document.getElementById('mre-beds').value);
+  const type = document.getElementById('mre-type').value;
+  const rent = parseInt(document.getElementById('mre-rent').value);
+
+  if(!num || !floor || !beds || !rent){ showToast('Fill all fields','error'); return; }
+
+  showToast('Updating room in database...', 'info');
+
+  try {
+    // 1. Sync to remote PostgreSQL
+    await updateRoomInDB(room.db_id, originalRoomNo, num, floor, beds);
+
+    // 2. Sync local memory
+    room.number = num;
+    room.floor = floor;
+    room.beds = beds;
+    room.type = type;
+    room.rent = rent;
+    room.id = `R${num}`;
+
+    DB.set('rooms', rooms);
+    closeModal();
+    showToast('Room details updated in PostgreSQL!','success');
+    navigateTo('rooms');
+  } catch (err) {
+    console.error('Update room error:', err);
+    showToast(`Failed to update room in DB: ${err.message}`, 'error');
+  }
 }
 
 function showAddRoomModal(){
@@ -189,20 +258,35 @@ function showAddRoomModal(){
     </div>`,false);
 }
 
-function addRoom(){
+async function addRoom(){
   const num=document.getElementById('mr-num').value.trim();
   const floor=parseInt(document.getElementById('mr-floor').value);
   const beds=parseInt(document.getElementById('mr-beds').value);
   const type=document.getElementById('mr-type').value;
   const rent=parseInt(document.getElementById('mr-rent').value);
   if(!num||!floor||!beds||!rent){ showToast('Fill all fields','error'); return; }
-  const rooms=DB.get('rooms')||[];
-  rooms.push({id:`R${num}`,number:num,floor,beds,occupied:0,type,rent});
-  DB.set('rooms',rooms);
-  closeModal();
-  showToast('Room added!','success');
-  navigateTo('rooms');
+
+  showToast('Saving new room to database...', 'info');
+
+  try {
+    // 1. Sync to remote PostgreSQL
+    const res = await saveNewRoomToDB(num, floor, beds);
+    const db_id = res && res[0] ? res[0].id : Date.now();
+
+    // 2. Update local storage
+    const rooms=DB.get('rooms')||[];
+    rooms.push({id:`R${num}`,number:num,floor,beds,occupied:0,type,rent,db_id});
+    DB.set('rooms',rooms);
+
+    closeModal();
+    showToast('Room saved to PostgreSQL!','success');
+    navigateTo('rooms');
+  } catch (err) {
+    console.error('Save room error:', err);
+    showToast(`Failed to save room in DB: ${err.message}`, 'error');
+  }
 }
+
 
 function showAllRooms(){
   const rooms = getRoomOccupancy();

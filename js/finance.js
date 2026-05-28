@@ -1,7 +1,30 @@
 // ===================== FINANCE MODULE =====================
+let activeFinanceTab = 'dues';
+let activeExpenseFilter = 'all';
+
+function switchFinanceTab(tab){
+  activeFinanceTab = tab;
+  navigateTo('finance');
+}
+
 function renderFinancePage(){
   const user = getCurrentUser();
   if(user.role==='tenant') return renderTenantFinance();
+
+  const tabHeader = `
+  <div class="tab-pills" style="margin-bottom:20px;display:flex;gap:8px;background:var(--bg3);padding:4px;border-radius:12px;max-width:320px">
+    <button class="tab-pill ${activeFinanceTab==='dues'?'active':''}" style="flex:1;padding:8px 12px;text-align:center;font-size:13px" onclick="switchFinanceTab('dues')"><i class="fas fa-rupee-sign"></i> Rent &amp; Dues</button>
+    <button class="tab-pill ${activeFinanceTab==='expenses'?'active':''}" style="flex:1;padding:8px 12px;text-align:center;font-size:13px" onclick="switchFinanceTab('expenses')"><i class="fas fa-receipt"></i> Daily Expenses</button>
+  </div>`;
+
+  if(activeFinanceTab === 'dues'){
+    return tabHeader + renderDuesSection();
+  } else {
+    return tabHeader + renderExpensesSection();
+  }
+}
+
+function renderDuesSection(){
   const tenants = (DB.get('tenants')||[]).filter(t=>t.status==='active');
   const activeTenantIds = tenants.map(t=>t.id);
   const payments = (DB.get('payments')||[]).filter(p=>activeTenantIds.includes(p.tenantId));
@@ -14,8 +37,8 @@ function renderFinancePage(){
   const thisMonthTotal = payments.filter(p=>p.month===currentMonth).length;
 
   return `
-  <div class="page-header">
-    <h1><i class="fas fa-rupee-sign" style="color:var(--success)"></i> Finance & Dues</h1>
+  <div class="page-header" style="margin-top:10px">
+    <h1><i class="fas fa-rupee-sign" style="color:var(--success)"></i> Rent Collection</h1>
     <p>Monthly Rent Collection Overview</p>
   </div>
   <div class="stats-grid">
@@ -532,4 +555,297 @@ function exportFinance(){
   payments.forEach(p=>{ csv+=`${p.tenantName},${p.roomId},${p.month},${p.amount},${p.status},${p.paidOn||''},${p.paymentMode||''},${p.txnId||''}\n`; });
   downloadCSV(csv,'slvpg_finance.csv');
   showToast('Finance report downloaded!','success');
+}
+
+// ===================== DAILY EXPENSES MANAGEMENT =====================
+function renderExpensesSection(){
+  const expenses = dbExpenses || DB.get('expenses') || [];
+  
+  // Apply date filters based on activeExpenseFilter
+  let filtered = [...expenses];
+  const now = new Date();
+  
+  if (activeExpenseFilter === 'weekly') {
+     const oneWeekAgo = new Date();
+     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+     filtered = expenses.filter(e => e.date && new Date(e.date) >= oneWeekAgo);
+  } else if (activeExpenseFilter === 'monthly') {
+     const currentMonthStr = now.toISOString().slice(0,7);
+     filtered = expenses.filter(e => e.date && e.date.startsWith(currentMonthStr));
+  } else if (activeExpenseFilter === 'yearly') {
+     const currentYearStr = now.getFullYear().toString();
+     filtered = expenses.filter(e => e.date && e.date.startsWith(currentYearStr));
+  }
+  
+  // Calculate aggregate stats from filtered list
+  const total = filtered.reduce((s,e)=>s+e.amount, 0);
+  const count = filtered.length;
+  const avg = count ? (total / count) : 0;
+  
+  // Calculate current month total for reference
+  const curMonthStr = now.toISOString().slice(0,7);
+  const monthTotal = expenses.filter(e => e.date && e.date.startsWith(curMonthStr)).reduce((s,e)=>s+e.amount, 0);
+  
+  // Calculate categories breakdown
+  const categories = ['Food & Groceries', 'Maintenance & Repairs', 'Electricity & Water', 'Staff Salaries', 'Marketing & Ads', 'Others'];
+  const catColors = {
+     'Food & Groceries': 'var(--primary)',
+     'Maintenance & Repairs': 'var(--accent)',
+     'Electricity & Water': 'var(--info)',
+     'Staff Salaries': 'var(--success)',
+     'Marketing & Ads': 'var(--secondary)',
+     'Others': '#64748b'
+  };
+  
+  const catTotals = {};
+  categories.forEach(c => { catTotals[c] = 0; });
+  filtered.forEach(e => {
+     const cat = e.category || 'Others';
+     if (catTotals[cat] !== undefined) {
+        catTotals[cat] += e.amount;
+     } else {
+        catTotals['Others'] += e.amount;
+     }
+  });
+
+  return `
+  <div class="page-header" style="margin-top:10px">
+    <h1><i class="fas fa-receipt" style="color:var(--primary-light)"></i> Daily Expenses</h1>
+    <p>Hostel Outflows &amp; Spend Analysis</p>
+  </div>
+  
+  <div class="stats-grid">
+    <div class="stat-card purple">
+      <div class="stat-icon purple"><i class="fas fa-wallet"></i></div>
+      <div class="stat-value">₹${total.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
+      <div class="stat-label">Total Outflow (${activeExpenseFilter.toUpperCase()})</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-icon green"><i class="fas fa-calendar-alt"></i></div>
+      <div class="stat-value">₹${monthTotal.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
+      <div class="stat-label">This Month Expenses</div>
+    </div>
+    <div class="stat-card pink">
+      <div class="stat-icon pink"><i class="fas fa-calculator"></i></div>
+      <div class="stat-value">₹${avg.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
+      <div class="stat-label">Average per Expense</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="stat-icon amber"><i class="fas fa-tags"></i></div>
+      <div class="stat-value">${count}</div>
+      <div class="stat-label">Expenses Count</div>
+    </div>
+  </div>
+  
+  <div class="grid-2">
+    <!-- Reports Period & Category budgets -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <span class="card-title" style="margin-bottom:0"><i class="fas fa-chart-pie"></i> Spend Category Analysis</span>
+        <select class="form-control" style="width:130px" onchange="filterExpensesByPeriod(this.value)">
+          <option value="all" ${activeExpenseFilter==='all'?'selected':''}>All Time</option>
+          <option value="weekly" ${activeExpenseFilter==='weekly'?'selected':''}>Weekly</option>
+          <option value="monthly" ${activeExpenseFilter==='monthly'?'selected':''}>Monthly</option>
+          <option value="yearly" ${activeExpenseFilter==='yearly'?'selected':''}>Yearly</option>
+        </select>
+      </div>
+      
+      <div style="display:flex;flex-direction:column;gap:14px">
+        ${categories.map(cat => {
+           const amt = catTotals[cat];
+           const pct = total > 0 ? Math.round(amt / total * 100) : 0;
+           const color = catColors[cat];
+           return `
+           <div>
+             <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px">
+               <strong>${cat}</strong>
+               <span style="color:var(--text3)">₹${amt.toLocaleString()} · <span style="color:${color};font-weight:700">${pct}%</span></span>
+             </div>
+             <div class="progress-bar" style="height:8px"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
+           </div>`;
+        }).join('')}
+      </div>
+      
+      <div style="margin-top:20px;display:flex;gap:10px">
+        <button class="btn btn-primary" onclick="showAddExpenseModal()"><i class="fas fa-plus-circle"></i> Add Daily Expense</button>
+        <button class="btn btn-secondary" onclick="exportExpensesCSV()"><i class="fas fa-file-excel"></i> Export Report</button>
+      </div>
+    </div>
+    
+    <!-- Quick Breakdown & Summary Info Box -->
+    <div class="card" style="display:flex;flex-direction:column;justify-content:space-between">
+      <div>
+        <div class="card-title"><i class="fas fa-info-circle"></i> Outflow Summary</div>
+        <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:14px">
+          Daily outflows represent operational expenditures spent to maintain high-quality women's PG services. All entered data maps in real-time to the secure PostgreSQL ledger: <code>TarakRam_ExpensesDetails</code>.
+        </p>
+        
+        <!-- Interactive Information List -->
+        <div style="background:var(--bg3);border-radius:10px;padding:12px;border:1px solid var(--border);font-size:12.5px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+             <span style="color:var(--text3)">Active Period:</span>
+             <strong style="text-transform:capitalize;color:var(--accent)">${activeExpenseFilter}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+             <span style="color:var(--text3)">Highest Outflow Category:</span>
+             <strong style="color:var(--text)">
+               ${(() => {
+                  let maxCat = 'None';
+                  let maxVal = -1;
+                  categories.forEach(c => {
+                     if(catTotals[c] > maxVal && catTotals[c] > 0) { maxVal = catTotals[c]; maxCat = c; }
+                  });
+                  return maxCat;
+               })()}
+             </strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+             <span style="color:var(--text3)">Expenses Count in Period:</span>
+             <strong>${count} transactions</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+             <span style="color:var(--text3)">PostgreSQL Table:</span>
+             <code style="color:var(--primary-light)">TarakRam_ExpensesDetails</code>
+          </div>
+        </div>
+      </div>
+      
+      <div style="background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(124,58,237,.05));border:1px dashed var(--success);border-radius:12px;padding:12px;margin-top:14px;display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:50%;background:rgba(16,185,129,.2);color:var(--success);display:flex;align-items:center;justify-content:center;font-size:18px"><i class="fas fa-database"></i></div>
+        <div style="font-size:11.5px;line-height:1.3;color:var(--text2)">
+          <strong>Supabase Direct Sync Active</strong><br/><span style="color:var(--text3)">Changes propagate instantly to remote PostgreSQL servers.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Expenses Ledger -->
+  <div class="card" style="margin-top:20px">
+    <div class="card-title"><i class="fas fa-list-ul"></i> Expenses Register <span style="font-size:11px;font-weight:normal;color:var(--text3);margin-left:6px">(Table: TarakRam_ExpensesDetails)</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Transaction ID</th>
+            <th>Date</th>
+            <th>Category</th>
+            <th>Item Details</th>
+            <th>Amount</th>
+            <th>Method</th>
+            <th>Paid By</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.length === 0 ? `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:30px"><i class="fas fa-receipt" style="font-size:24px;margin-bottom:8px"></i><br/>No expense records found for this period.</td></tr>` :
+          filtered.map(e => `
+          <tr>
+            <td><code style="color:var(--accent);font-weight:600;font-size:12px">${e.txnId}</code></td>
+            <td><strong>${formatDate(e.date)}</strong></td>
+            <td><span class="badge" style="background:${catColors[e.category] || '#64748b'};color:#fff">${e.category}</span></td>
+            <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.itemDetails}">${e.itemDetails}</td>
+            <td><strong style="color:var(--danger)">₹${e.amount.toLocaleString()}</strong></td>
+            <td><span style="font-size:12px;color:var(--text2)"><i class="fas fa-${e.paymentMethod==='UPI'?'mobile-alt':e.paymentMethod==='Cash'?'money-bill-wave':'credit-card'}"></i> ${e.paymentMethod}</span></td>
+            <td><span class="badge badge-purple">${e.paidBy}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function filterExpensesByPeriod(period){
+  activeExpenseFilter = period;
+  navigateTo('finance');
+}
+
+function showAddExpenseModal(){
+  const randTxn = 'EXP-' + new Date().toISOString().slice(2,10).replace(/-/g,'') + '-' + Math.random().toString(36).substr(2,5).toUpperCase();
+  const today = new Date().toISOString().slice(0,10);
+  
+  showModal('Add Daily Outflow / Expense', `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Transaction ID *</label><input class="form-control" id="ex-txn" value="${randTxn}" /></div>
+      <div class="form-group"><label class="form-label">Date *</label><input class="form-control" type="date" id="ex-date" value="${today}" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Category *</label>
+        <select class="form-control" id="ex-category">
+          <option>Food & Groceries</option>
+          <option>Maintenance & Repairs</option>
+          <option>Electricity & Water</option>
+          <option>Staff Salaries</option>
+          <option>Marketing & Ads</option>
+          <option>Others</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Payment Method *</label>
+        <select class="form-control" id="ex-method">
+          <option>UPI</option>
+          <option>Cash</option>
+          <option>Card</option>
+          <option>NEFT</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Amount (₹) *</label><input class="form-control" type="number" id="ex-amount" placeholder="e.g. 1500" /></div>
+      <div class="form-group"><label class="form-label">Paid By *</label><input class="form-control" id="ex-paidby" value="Admin" placeholder="Manager/Admin" /></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Item / Expenditure Details *</label>
+      <textarea class="form-control" id="ex-details" rows="3" placeholder="Provide description of what was purchased..." style="height:auto;padding:10px"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveExpense()"><i class="fas fa-save"></i> Save Outflow</button>
+    </div>`, false);
+}
+
+async function saveExpense(){
+  const txnId = document.getElementById('ex-txn').value.trim();
+  const date = document.getElementById('ex-date').value;
+  const category = document.getElementById('ex-category').value;
+  const itemDetails = document.getElementById('ex-details').value.trim();
+  const amount = parseFloat(document.getElementById('ex-amount').value);
+  const paidBy = document.getElementById('ex-paidby').value.trim();
+  const paymentMethod = document.getElementById('ex-method').value;
+  
+  if(!txnId || !date || !category || !itemDetails || isNaN(amount) || amount <= 0 || !paidBy){
+     showToast('Please fill all required fields correctly', 'error');
+     return;
+  }
+  
+  showToast('Saving expense to database...', 'info');
+  
+  try {
+     const newExpense = {
+        txnId,
+        date,
+        category,
+        itemDetails,
+        amount,
+        paymentMethod,
+        paidBy
+     };
+     
+     // 1. Save to Remote Supabase TarakRam_ExpensesDetails
+     await saveNewExpenseToDB(newExpense);
+     
+     closeModal();
+     showToast('Daily expense successfully logged in PostgreSQL!', 'success');
+     navigateTo('finance');
+  } catch(err) {
+     console.error('Save expense error:', err);
+     showToast(`Failed to save expense in DB: ${err.message}`, 'error');
+  }
+}
+
+function exportExpensesCSV(){
+  const expenses = dbExpenses || DB.get('expenses') || [];
+  let csv = 'Transaction ID,Date,Category,Item Details,Amount,Payment Method,Paid By\n';
+  expenses.forEach(e => {
+     csv += `"${e.txnId}","${e.date}","${e.category}","${e.itemDetails.replace(/"/g, '""')}",${e.amount},"${e.paymentMethod}","${e.paidBy}"\n`;
+  });
+  downloadCSV(csv, 'tarakram_expenses_report.csv');
+  showToast('Expenses CSV downloaded!', 'success');
 }

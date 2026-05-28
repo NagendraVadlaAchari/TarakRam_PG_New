@@ -12,6 +12,7 @@ async function initApp(){
     // Attempt to load data from DB before starting the app
     await loadRoomsFromDB();
     await loadTenantsFromDB();
+    await loadExpensesFromDB();
   } catch (err) {
     console.error("Failed to load data on boot", err);
   }
@@ -21,8 +22,8 @@ async function initApp(){
 
 function renderApp(){
   const user = getCurrentUser();
-  if (user && user.role === 'guest' && currentPage === 'dashboard') {
-    currentPage = 'rooms';
+  if (user && user.role === 'guest' && (currentPage === 'dashboard' || currentPage === 'rooms')) {
+    currentPage = 'booking';
   }
   const app = document.getElementById('app');
   const unread = getUnreadCount();
@@ -30,7 +31,6 @@ function renderApp(){
   const isGuest = user ? user.role === 'guest' : true;
 
   const navItems = isGuest ? [
-    {id:'rooms',icon:'building',label:'Rooms & Occupancy'},
     {id:'booking',icon:'key',label:'Book Room'},
     {id:'reviews',icon:'star',label:'Reviews'},
     {id:'visit',icon:'calendar-check',label:'Book Visit'},
@@ -112,7 +112,7 @@ function renderApp(){
       <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9999999999');navigateTo('dashboard');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user-shield" style="color:var(--primary-light);"></i> Admin / Owner</button>
       <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9876543210');navigateTo('dashboard');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user-circle" style="color:var(--secondary);"></i> Tenant (Priya)</button>
       <button class="btn btn-secondary btn-sm" onclick="bypassLogin('9876543211');navigateTo('dashboard');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user-circle" style="color:var(--accent);"></i> Tenant (Ananya)</button>
-      <button class="btn btn-secondary btn-sm" onclick="continueAsGuest();navigateTo('rooms');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user" style="color:var(--info);"></i> Guest View</button>
+      <button class="btn btn-secondary btn-sm" onclick="continueAsGuest();navigateTo('booking');" style="margin-bottom:6px;width:100%;justify-content:flex-start;"><i class="fas fa-user" style="color:var(--info);"></i> Guest View</button>
       <button class="btn btn-secondary btn-sm" onclick="showSMSConfigModal()" style="margin-bottom:6px;width:100%;justify-content:flex-start;background:rgba(124,58,237,0.08);border:1px dashed var(--primary-light);"><i class="fas fa-comment-sms" style="color:var(--primary-light);"></i> SMS Setup Gateway</button>
       <button class="btn btn-danger btn-sm" onclick="logoutUser()" style="width:100%;justify-content:center;"><i class="fas fa-sign-out-alt"></i> Logout / Clear Session</button>
     </div>
@@ -159,7 +159,7 @@ function renderAdminDashboard(){
   return `
   <div class="page-header">
     <h1>Welcome back, <span class="grad-text">Admin</span> 👋</h1>
-    <p>Sri Lakshmi Venkateswara Women's PG — Hyderabad</p>
+    <p>Tarak Ram Luxery Womens PG</p>
   </div>
 
   <div class="stats-grid">

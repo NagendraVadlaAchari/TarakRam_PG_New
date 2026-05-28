@@ -21,18 +21,30 @@ let dbRoomsLoaded = false;
 let dbRoomsLoading = false;
 let dbRoomsError = null;
 
+let dbExpenses = [];
+let dbExpensesLoaded = false;
+let dbExpensesLoading = false;
+
 // Helper: Make authenticated request to Supabase REST API (PostgREST)
-async function supabaseRequest(tableName, queryParams = '') {
+async function supabaseRequest(tableName, queryParams = '', method = 'GET', body = null) {
   const url = `${SUPABASE_CONFIG.url}/rest/v1/${tableName}${queryParams ? '?' + queryParams : ''}`;
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'apikey': SUPABASE_CONFIG.apiKey,
-      'Authorization': `Bearer ${SUPABASE_CONFIG.apiKey}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=representation'
-    }
-  });
+  const headers = {
+    'apikey': SUPABASE_CONFIG.apiKey,
+    'Authorization': `Bearer ${SUPABASE_CONFIG.apiKey}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  };
+  
+  const options = {
+    method: method,
+    headers: headers
+  };
+  
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+  
+  const response = await fetch(url, options);
   if (!response.ok) {
     const errorBody = await response.text();
     console.error(`[Supabase] HTTP ${response.status}:`, errorBody);
@@ -53,14 +65,20 @@ async function fetchDBRooms() {
     // Map DB columns to the format the frontend expects
     const rooms = roomRows.map(row => {
       const roomMembers = memberRows.filter(m => m.Room_No === row.Room_No);
+      const rNumStr = String(row.Room_No);
+      // Premium AC Rooms end in .01 or .02 (or 101, 102, 201, 202, etc.)
+      const isAC = rNumStr.endsWith('01') || rNumStr.endsWith('02') || rNumStr.endsWith('.01') || rNumStr.endsWith('.02');
+      const type = isAC ? 'AC' : 'Non-AC';
+      const rent = isAC ? 8000 : 6000;
+
       return {
         id: `R${row.Room_No}`,
-        number: String(row.Room_No),
+        number: rNumStr,
         floor: parseInt(row.Floor_No) || 1,
         beds: parseInt(row.Room_Capacity) || 4,
         occupied: roomMembers.length,
-        type: 'Standard',
-        rent: 6000,
+        type: type,
+        rent: rent,
         created_at: row.created_at,
         db_id: row.id,
         members: roomMembers
@@ -74,6 +92,94 @@ async function fetchDBRooms() {
     throw err;
   }
 }
+
+// Check maximum ID in TarakRam_RoomDetails and return next ID
+async function getNextRoomId() {
+  try {
+    const res = await supabaseRequest('TarakRam_RoomDetails', 'select=id&order=id.desc&limit=1');
+    if (res && res.length > 0) {
+      return parseInt(res[0].id) + 1;
+    }
+    return 1;
+  } catch (err) {
+    console.error("Failed to get next room ID:", err);
+    return 1;
+  }
+}
+
+// Check maximum ID in RoomWise_MemberList and return next ID
+async function getNextTenantId() {
+  try {
+    const res = await supabaseRequest('RoomWise_MemberList', 'select=id&order=id.desc&limit=1');
+    if (res && res.length > 0) {
+      return parseInt(res[0].id) + 1;
+    }
+    return 1;
+  } catch (err) {
+    console.error("Failed to get next tenant ID:", err);
+    return 1;
+  }
+}
+
+// Save new room in PostgreSQL
+async function saveNewRoomToDB(roomNumber, floor, capacity) {
+  const nextId = await getNextRoomId();
+  const body = {
+    id: nextId,
+    Room_No: String(roomNumber),
+    Floor_No: String(floor),
+    Room_Capacity: String(capacity)
+  };
+  return await supabaseRequest('TarakRam_RoomDetails', '', 'POST', body);
+}
+
+// Update existing room in PostgreSQL
+async function updateRoomInDB(dbId, originalRoomNo, newRoomNo, floor, capacity) {
+  let queryParams = '';
+  if (dbId) {
+    queryParams = `id=eq.${dbId}`;
+  } else {
+    queryParams = `Room_No=eq.${originalRoomNo}`;
+  }
+  
+  const body = {
+    Room_No: String(newRoomNo),
+    Floor_No: String(floor),
+    Room_Capacity: String(capacity)
+  };
+  return await supabaseRequest('TarakRam_RoomDetails', queryParams, 'PATCH', body);
+}
+
+// Save new tenant in PostgreSQL RoomWise_MemberList
+async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roomNo, floorNo) {
+  const nextId = await getNextTenantId();
+  const body = {
+    id: nextId,
+    Tenant_Name: String(tenantName),
+    Mobile_No: String(mobileNo),
+    Occupation: String(occupation),
+    DOJ: joinDate ? joinDate : null,
+    Room_No: String(roomNo),
+    Floor_No: String(floorNo)
+  };
+  return await supabaseRequest('RoomWise_MemberList', '', 'POST', body);
+}
+
+// Update existing tenant in PostgreSQL RoomWise_MemberList
+async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate, roomNo, floorNo) {
+  if (!dbId) throw new Error('No DB ID provided for tenant update');
+  const queryParams = `id=eq.${dbId}`;
+  const body = {
+    Tenant_Name: String(tenantName),
+    Mobile_No: String(mobileNo),
+    Occupation: String(occupation),
+    DOJ: joinDate ? joinDate : null,
+    Room_No: String(roomNo),
+    Floor_No: String(floorNo)
+  };
+  return await supabaseRequest('RoomWise_MemberList', queryParams, 'PATCH', body);
+}
+
 
 // Load rooms from Supabase and store in localStorage for seamless use
 async function loadRoomsFromDB() {
@@ -106,6 +212,54 @@ async function loadRoomsFromDB() {
     return fallback || [];
   }
 }
+
+// Fetch all expenses from TarakRam_ExpensesDetails
+async function loadExpensesFromDB() {
+  if (dbExpensesLoading) return;
+  dbExpensesLoading = true;
+  try {
+    console.log('[Supabase] Fetching expenses from TarakRam_ExpensesDetails...');
+    const rows = await supabaseRequest('TarakRam_ExpensesDetails', 'select=*&order=Date.desc');
+    dbExpenses = rows.map(r => ({
+      id: r.id,
+      txnId: r.TransactionID,
+      date: r.Date,
+      category: r.Category,
+      itemDetails: r.ItemDetails,
+      amount: parseFloat(r.Amount) || 0,
+      paymentMethod: r.PaymentMethod,
+      paidBy: r.PaidBy
+    }));
+    DB.set('expenses', dbExpenses);
+    dbExpensesLoaded = true;
+    dbExpensesLoading = false;
+    console.log(`[Supabase] ✅ Loaded ${dbExpenses.length} expenses from database`);
+    return dbExpenses;
+  } catch (err) {
+    console.error('[Supabase] ❌ Expenses loading failed:', err.message);
+    dbExpensesLoading = false;
+    dbExpensesLoaded = false;
+    dbExpenses = DB.get('expenses') || [];
+    return dbExpenses;
+  }
+}
+
+// Save a new expense to TarakRam_ExpensesDetails
+async function saveNewExpenseToDB(expense) {
+  const body = {
+    TransactionID: expense.txnId,
+    Date: expense.date,
+    Category: expense.category,
+    ItemDetails: expense.itemDetails,
+    Amount: parseFloat(expense.amount) || 0,
+    PaymentMethod: expense.paymentMethod,
+    PaidBy: expense.paidBy
+  };
+  const result = await supabaseRequest('TarakRam_ExpensesDetails', '', 'POST', body);
+  await loadExpensesFromDB();
+  return result;
+}
+
 
 // Fetch tenants from Supabase (RoomWise_MemberList) — direct REST API call
 async function fetchDBTenants() {
