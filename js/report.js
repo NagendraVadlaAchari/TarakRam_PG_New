@@ -172,6 +172,7 @@ function exportApplicationDataExcel() {
    <Font ss:FontName="Segoe UI" x:Family="Swiss" ss:Size="11"/>
   </Style>
   <Style ss:ID="Amount">
+   <Font ss:FontName="Segoe UI" x:Family="Swiss" ss:Size="11" ss:Color="#1F2937"/>
    <NumberFormat ss:Format="&quot;₹&quot;#,##0"/>
   </Style>
  </Styles>
@@ -206,32 +207,32 @@ function exportApplicationDataExcel() {
    </Row>
    <Row>
     <Cell ss:StyleID="Value"><Data ss:Type="String">Expected Monthly Billings</Data></Cell>
-    <Cell ss:StyleID="Value" ss:StyleID="Amount"><Data ss:Type="Number">${totalRentAmount}</Data></Cell>
+    <Cell ss:StyleID="Amount"><Data ss:Type="Number">${totalRentAmount}</Data></Cell>
     <Cell ss:StyleID="Value"><Data ss:Type="String">Standard rent roster cycle value</Data></Cell>
    </Row>
    <Row>
     <Cell ss:StyleID="Value"><Data ss:Type="String">Collections (${currentMonth})</Data></Cell>
-    <Cell ss:StyleID="Value" ss:StyleID="Amount"><Data ss:Type="Number">${collectedThisMonth}</Data></Cell>
+    <Cell ss:StyleID="Amount"><Data ss:Type="Number">${collectedThisMonth}</Data></Cell>
     <Cell ss:StyleID="Value"><Data ss:Type="String">Dues successfully collected</Data></Cell>
    </Row>
    <Row>
     <Cell ss:StyleID="Value"><Data ss:Type="String">Outstanding Dues (${currentMonth})</Data></Cell>
-    <Cell ss:StyleID="Value" ss:StyleID="Amount"><Data ss:Type="Number">${pendingThisMonth}</Data></Cell>
+    <Cell ss:StyleID="Amount"><Data ss:Type="Number">${pendingThisMonth}</Data></Cell>
     <Cell ss:StyleID="Value"><Data ss:Type="String">${mPayments.filter(p=>p.status==='pending').length} tenants pending payment</Data></Cell>
    </Row>
    <Row>
     <Cell ss:StyleID="Value"><Data ss:Type="String">Cumulative Collected Rent (All Time)</Data></Cell>
-    <Cell ss:StyleID="Value" ss:StyleID="Amount"><Data ss:Type="Number">${totalPaidEver}</Data></Cell>
+    <Cell ss:StyleID="Amount"><Data ss:Type="Number">${totalPaidEver}</Data></Cell>
     <Cell ss:StyleID="Value"><Data ss:Type="String">Total historic revenue</Data></Cell>
    </Row>
    <Row>
     <Cell ss:StyleID="Value"><Data ss:Type="String">Cumulative Operational Expenses</Data></Cell>
-    <Cell ss:StyleID="Value" ss:StyleID="Amount"><Data ss:Type="Number">${totalExpenses}</Data></Cell>
+    <Cell ss:StyleID="Amount"><Data ss:Type="Number">${totalExpenses}</Data></Cell>
     <Cell ss:StyleID="Value"><Data ss:Type="String">Total operational outflows</Data></Cell>
    </Row>
    <Row>
     <Cell ss:StyleID="Value"><Data ss:Type="String">Cumulative Net Cash Margin</Data></Cell>
-    <Cell ss:StyleID="Value" ss:StyleID="Amount"><Data ss:Type="Number">${netEarnings}</Data></Cell>
+    <Cell ss:StyleID="Amount"><Data ss:Type="Number">${netEarnings}</Data></Cell>
     <Cell ss:StyleID="Value"><Data ss:Type="String">Roster balance margin</Data></Cell>
    </Row>
   </Table>
