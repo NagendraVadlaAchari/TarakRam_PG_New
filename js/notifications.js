@@ -2,7 +2,8 @@
 function renderNotificationsPanel(){
   const user = getCurrentUser();
   const all = DB.get('notifications')||[];
-  const mine = all.filter(n=> user.role==='admin' ? n.to==='admin' : (n.to===user.tenantId||n.to==='all'));
+  const targetId = getUserTenantId(user);
+  const mine = all.filter(n=> user.role==='admin' ? n.to==='admin' : (n.to===targetId||n.to==='all'));
 
   return `
   <div class="page-header">
@@ -44,17 +45,29 @@ function typeIcon(t){
 function markRead(id){
   const notifs = DB.get('notifications')||[];
   const n = notifs.find(n=>n.id===id);
-  if(n) n.read=true;
-  DB.set('notifications',notifs);
+  if(n){
+    n.read=true;
+    DB.set('notifications',notifs);
+    // Also persist to DB
+    if(n.db_id){
+      updateNotificationReadStatusInDB(n.db_id, true).catch(e=>console.warn('[DB] markRead sync failed:',e));
+    }
+  }
   navigateTo('notifications');
 }
 
 function markAllRead(){
   const user = getCurrentUser();
   const notifs = DB.get('notifications')||[];
+  const targetId = getUserTenantId(user);
   notifs.forEach(n=>{
-    if(user.role==='admin'&&n.to==='admin') n.read=true;
-    else if(n.to===user.tenantId||n.to==='all') n.read=true;
+    const mine = user.role==='admin' ? n.to==='admin' : (n.to===targetId||n.to==='all');
+    if(mine && !n.read){
+      n.read=true;
+      if(n.db_id){
+        updateNotificationReadStatusInDB(n.db_id, true).catch(e=>console.warn('[DB] markAllRead sync failed:',e));
+      }
+    }
   });
   DB.set('notifications',notifs);
   showToast('All notifications marked as read','success');
@@ -62,18 +75,23 @@ function markAllRead(){
 }
 
 function addNotification(notif){
+  // Save locally immediately for instant UI feedback
   const notifs = DB.get('notifications')||[];
-  notifs.unshift({id:genId('N'),date:new Date().toISOString().slice(0,10),read:false,...notif});
+  const localEntry = {id:genId('N'),date:new Date().toISOString().slice(0,10),read:false,...notif};
+  notifs.unshift(localEntry);
   DB.set('notifications',notifs);
+  // Persist to database asynchronously
+  saveNewNotificationToDB(localEntry).catch(e=>console.warn('[DB] addNotification persist failed:',e));
 }
 
 function getUnreadCount(){
   const user = getCurrentUser();
   if(!user) return 0;
   const notifs = DB.get('notifications')||[];
+  const targetId = getUserTenantId(user);
   return notifs.filter(n=>{
     if(user.role==='admin') return n.to==='admin'&&!n.read;
-    return (n.to===user.tenantId||n.to==='all')&&!n.read;
+    return (n.to===targetId||n.to==='all')&&!n.read;
   }).length;
 }
 

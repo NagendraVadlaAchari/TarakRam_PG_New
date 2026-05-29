@@ -127,13 +127,16 @@ tr:hover td{background:rgba(124,58,237,.06);}
 .toast-msg{font-size:13px;color:var(--text2);}
 @keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
 /* Auth page */
-.auth-page{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at top left,rgba(124,58,237,.3) 0%,transparent 50%),radial-gradient(ellipse at bottom right,rgba(236,72,153,.2) 0%,transparent 50%),var(--bg);}
-.auth-card{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:40px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
-.auth-logo{text-align:center;margin-bottom:28px;}
-.auth-logo .icon{width:70px;height:70px;background:linear-gradient(135deg,var(--primary),var(--secondary));border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 14px;}
+.auth-page{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at top left,rgba(124,58,237,.3) 0%,transparent 50%),radial-gradient(ellipse at bottom right,rgba(236,72,153,.2) 0%,transparent 50%),var(--bg);overflow-y:auto;}
+@media (min-width: 769px) {
+  .auth-page{height:100vh;overflow:hidden;}
+}
+.auth-card{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:28px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+.auth-logo{text-align:center;margin-bottom:16px;}
+.auth-logo .icon{width:48px;height:48px;background:linear-gradient(135deg,var(--primary),var(--secondary));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto 10px;}
 .auth-logo h2{font-family:'Poppins',sans-serif;font-size:22px;font-weight:700;}
 .auth-logo p{color:var(--text3);font-size:13px;margin-top:4px;}
-.tab-pills{display:flex;background:var(--bg3);border-radius:10px;padding:4px;margin-bottom:24px;}
+.tab-pills{display:flex;background:var(--bg3);border-radius:10px;padding:4px;margin-bottom:16px;}
 .tab-pill{flex:1;padding:8px;text-align:center;font-size:13px;font-weight:600;color:var(--text3);cursor:pointer;border-radius:8px;border:none;background:none;transition:all .2s;}
 .tab-pill.active{background:var(--primary);color:#fff;}
 .otp-inputs{display:flex;gap:10px;justify-content:center;margin:16px 0;}
@@ -270,3 +273,28 @@ tr:hover td{background:rgba(124,58,237,.06);}
 .demo-switcher-body .btn:last-child {
   margin-bottom: 0;
 }
+
+/* Dual Column Auth Page Layout */
+.auth-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 30px;
+  max-width: 1000px;
+  width: 100%;
+  padding: 20px;
+  align-items: stretch;
+}
+@media (min-width: 769px) {
+  .auth-container {
+    grid-template-columns: 1fr 1.15fr;
+  }
+}
+@media (max-width: 768px) {
+  .auth-container {
+    max-width: 460px;
+  }
+  .facilities-card {
+    max-width: 100% !important;
+  }
+}
+

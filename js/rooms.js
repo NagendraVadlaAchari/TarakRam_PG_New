@@ -10,7 +10,7 @@ function renderRoomsPage(){
 
   // Show DB connection status
   const dbStatusBadge = dbRoomsLoaded 
-    ? `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,.15);color:#10b981;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600"><i class="fas fa-database"></i> Live from PostgreSQL</span>`
+    ? ``
     : dbRoomsError
     ? `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(239,68,68,.15);color:#ef4444;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600"><i class="fas fa-exclamation-triangle"></i> DB Error — Using cache</span>`
     : dbRoomsLoading

@@ -333,6 +333,58 @@ async function loadTenantsFromDB() {
   }
 }
 
+// ===================== SUPABASE VISITS SYNC =====================
+async function loadVisitsFromDB() {
+  try {
+    console.log('[Supabase] Fetching visits from TarakRam_VisitBookings...');
+    const rows = await supabaseRequest('TarakRam_VisitBookings', 'select=*&order=date.desc,time.asc');
+    const visits = rows.map(row => ({
+      id: 'V' + row.id,
+      name: row.name,
+      mobile: row.mobile,
+      date: row.date,
+      time: row.time,
+      purpose: row.purpose,
+      notes: row.notes,
+      status: row.status,
+      bookedOn: row.booked_on,
+      db_id: row.id,
+      visitor_id: row.visitor_id
+    }));
+    DB.set('visits', visits);
+    console.log(`[Supabase] ✅ Loaded ${visits.length} visits from database`);
+    return visits;
+  } catch (err) {
+    console.error('[Supabase] ❌ Visit loading failed:', err.message);
+    return DB.get('visits') || [];
+  }
+}
+
+async function saveNewVisitToDB(visit) {
+  const body = {
+    name: visit.name,
+    mobile: visit.mobile,
+    date: visit.date,
+    time: visit.time,
+    purpose: visit.purpose,
+    notes: visit.notes,
+    status: visit.status,
+    booked_on: visit.bookedOn,
+    visitor_id: visit.visitor_id
+  };
+  const res = await supabaseRequest('TarakRam_VisitBookings', '', 'POST', body);
+  await loadVisitsFromDB();
+  return res;
+}
+
+async function updateVisitStatusInDB(dbId, status) {
+  const queryParams = `id=eq.${dbId}`;
+  const body = { status };
+  const res = await supabaseRequest('TarakRam_VisitBookings', queryParams, 'PATCH', body);
+  await loadVisitsFromDB();
+  return res;
+}
+
 // Seed default data if first run
 function seedData(){
   if(DB.get('seeded')) return;
@@ -479,6 +531,132 @@ function getUnreadNotifications(role,tenantId){
     if(role==='admin') return n.to==='admin';
     return n.to===tenantId||n.to==='all';
   }).filter(n=>!n.read);
+}
+
+// Get next auto-increment ID for TarakRam_LoginMaster_Data (DB has no sequence)
+async function getNextLoginMasterId() {
+  try {
+    const res = await supabaseRequest('TarakRam_LoginMaster_Data', 'select=id&order=id.desc&limit=1');
+    if (res && res.length > 0) {
+      return parseInt(res[0].id) + 1;
+    }
+    return 1;
+  } catch (err) {
+    console.error('Failed to get next login master ID:', err);
+    return null;
+  }
+}
+
+function getUserTenantId(user) {
+  if (!user) return null;
+  if (user.role === 'tenant' && user.tenantId) return user.tenantId;
+  if (user.tenantId) return user.tenantId;
+  
+  const tenants = DB.get('tenants') || [];
+  const uName = (user.name || '').trim().toLowerCase();
+  const uMobile = (user.mobile || '').replace(/\D/g, '');
+  const dbRecord = user.dbRecord || {};
+  const dbUser = (dbRecord.userName || '').trim().toLowerCase();
+  const dbMobile = (dbRecord.mobile_Number || '').replace(/\D/g, '');
+
+  const nameToMatch = uName || dbUser;
+  const mobileToMatch = uMobile || dbMobile;
+
+  if (!nameToMatch && !mobileToMatch) return null;
+
+  // 1. Both name and mobile match
+  let match = tenants.find(t => {
+    const tName = (t.name || '').trim().toLowerCase();
+    const tMobile = (t.mobile || '').replace(/\D/g, '');
+    return nameToMatch && tName === nameToMatch && mobileToMatch && tMobile === mobileToMatch;
+  });
+
+  // 2. Name matches
+  if (!match && nameToMatch) {
+    match = tenants.find(t => {
+      const tName = (t.name || '').trim().toLowerCase();
+      return tName === nameToMatch;
+    });
+  }
+
+  // 3. Mobile matches
+  if (!match && mobileToMatch) {
+    match = tenants.find(t => {
+      const tMobile = (t.mobile || '').replace(/\D/g, '');
+      return tMobile === mobileToMatch;
+    });
+  }
+
+  return match ? match.id : null;
+}
+
+// ===================== DYNAMIC NOTIFICATIONS DATABASE SYNC =====================
+async function loadNotificationsFromDB() {
+  try {
+    console.log('[Supabase] Fetching notifications from TarakRam_Notifications...');
+    const rows = await supabaseRequest('TarakRam_Notifications', 'select=*&order=id.desc');
+    
+    // If database table is empty, seed it with defaults
+    if (rows.length === 0) {
+      console.log('[Supabase] Database notifications empty. Seeding defaults...');
+      const defaults = [
+        {type:'due',title:'Rent Due Reminder',message:'Rent for May 2026 is due on 5th May for 3 tenants.',date:'2026-05-01',read:false,to_user:'admin'},
+        {type:'join',title:'New Tenant Joined',message:'Divya Menon joined Room 201 on 25-Mar-2026.',date:'2026-03-25',read:true,to_user:'admin'},
+        {type:'due',title:'Your Rent is Due',message:'Your rent of ₹8,000 for May 2026 is pending. Please pay by 5th May.',date:'2026-05-01',read:false,to_user:'T001'},
+        {type:'review',title:'New Review Pending',message:'A guest has submitted a review pending your approval.',date:'2026-05-10',read:false,to_user:'admin'},
+        {type:'visit',title:'Visit Scheduled',message:'Preethi has booked a site visit on 20-May-2026 at 11:00 AM.',date:'2026-05-18',read:false,to_user:'admin'},
+      ];
+      // Save all defaults to DB
+      for (const d of defaults) {
+        await supabaseRequest('TarakRam_Notifications', '', 'POST', d);
+      }
+      // Re-fetch
+      const seededRows = await supabaseRequest('TarakRam_Notifications', 'select=*&order=id.desc');
+      return mapDBNotifications(seededRows);
+    }
+
+    return mapDBNotifications(rows);
+  } catch (err) {
+    console.error('[Supabase] ❌ Notifications loading failed:', err.message);
+    return DB.get('notifications') || [];
+  }
+}
+
+function mapDBNotifications(rows) {
+  const mapped = rows.map(r => ({
+    id: 'N' + r.id,
+    type: r.type,
+    title: r.title,
+    message: r.message,
+    date: r.date,
+    read: r.read,
+    to: r.to_user,
+    db_id: r.id
+  }));
+  DB.set('notifications', mapped);
+  return mapped;
+}
+
+async function saveNewNotificationToDB(notif) {
+  const body = {
+    type: notif.type,
+    title: notif.title,
+    message: notif.message,
+    date: notif.date || new Date().toISOString().slice(0, 10),
+    read: notif.read || false,
+    to_user: notif.to
+  };
+  const res = await supabaseRequest('TarakRam_Notifications', '', 'POST', body);
+  await loadNotificationsFromDB();
+  return res;
+}
+
+async function updateNotificationReadStatusInDB(dbId, readStatus) {
+  const queryParams = `id=eq.${dbId}`;
+  const body = { read: readStatus };
+  const res = await supabaseRequest('TarakRam_Notifications', queryParams, 'PATCH', body);
+  await loadNotificationsFromDB();
+  return res;
 }
 
 seedData();

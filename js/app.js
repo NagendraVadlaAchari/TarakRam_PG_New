@@ -13,6 +13,8 @@ async function initApp(){
     await loadRoomsFromDB();
     await loadTenantsFromDB();
     await loadExpensesFromDB();
+    await loadVisitsFromDB();
+    await loadNotificationsFromDB();
   } catch (err) {
     console.error("Failed to load data on boot", err);
   }
@@ -36,6 +38,7 @@ function renderApp(){
     {id:'booking',icon:'key',label:'Book Room'},
     {id:'reviews',icon:'star',label:'Reviews'},
     {id:'visit',icon:'calendar-check',label:'Book Visit'},
+    {id:'reminders',icon:'bell',label:'Payment Reminders'},
   ] : user.role === 'admin' ? [
     {id:'dashboard',icon:'tachometer-alt',label:'Dashboard'},
     {id:'rooms',icon:'building',label:'Rooms & Occupancy'},
@@ -105,7 +108,7 @@ function renderApp(){
   </div>
 
   <!-- Demo Switcher -->
-  <div class="demo-switcher">
+  <div class="demo-switcher" style="display: none !important;">
     <div class="demo-switcher-header" onclick="toggleDemoSwitcher()">
       <span><i class="fas fa-flask" style="color:var(--accent);"></i> Quick Demo Switcher</span>
       <i class="fas fa-chevron-up toggle-icon" id="demo-toggle-icon"></i>
@@ -117,6 +120,7 @@ function renderApp(){
   </div>
   `;
 }
+
 
 function renderPage(page){
   const user = getCurrentUser();
@@ -131,9 +135,35 @@ function renderPage(page){
     case 'notifications': return renderNotificationsPanel();
     case 'reviews': return renderReviewsPage();
     case 'visit': return renderVisitPage();
+    case 'reminders': refreshAndRenderReminders(); return renderGuestRemindersSkeleton();
     default: return renderAdminDashboard();
   }
 }
+
+// Async refresh: fetch latest notifications from DB then re-render the reminders panel
+function refreshAndRenderReminders() {
+  loadNotificationsFromDB().then(() => {
+    const pc = document.getElementById('page-content');
+    if (pc && currentPage === 'reminders') {
+      pc.innerHTML = renderGuestReminders();
+    }
+  }).catch(e => console.warn('[DB] Reminders refresh failed:', e));
+}
+
+function renderGuestRemindersSkeleton() {
+  return `
+  <div class="page-header">
+    <h1><i class="fas fa-bell" style="color:var(--accent)"></i> Payment Reminders</h1>
+    <p>Loading your reminders from server...</p>
+  </div>
+  <div class="card" style="text-align:center;padding:48px 24px">
+    <div style="width:56px;height:56px;border-radius:50%;background:rgba(124,58,237,0.1);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--primary-light);margin:0 auto 16px;animation:spin 1s linear infinite">
+      <i class="fas fa-sync-alt"></i>
+    </div>
+    <p style="color:var(--text3);font-size:13px">Fetching latest reminders from database...</p>
+  </div>`;
+}
+
 
 function toggleSidebar(){
   document.getElementById('sidebar').classList.toggle('open');
@@ -248,6 +278,7 @@ function renderAdminDashboard(){
           <button class="btn btn-secondary" onclick="sendDueReminders()"><i class="fas fa-paper-plane"></i> Send Reminders</button>
           <button class="btn btn-secondary" onclick="navigateTo('documents')"><i class="fas fa-folder-open"></i> Documents</button>
           <button class="btn btn-secondary" onclick="navigateTo('visit')"><i class="fas fa-calendar"></i> Visits (${visits.length})</button>
+          <button class="btn btn-primary" style="grid-column: span 2; background: linear-gradient(135deg, var(--primary), var(--secondary)); border: none; font-weight: 600; color: #fff;" onclick="showExportOptionsModal()"><i class="fas fa-file-export"></i> Export Entire App Data</button>
         </div>
         ${pendingReviews.length?`<div style="margin-top:12px;padding:10px;background:rgba(245,158,11,.1);border-radius:8px;cursor:pointer" onclick="navigateTo('reviews')"><p style="font-size:13px;color:var(--accent)"><i class="fas fa-star"></i> ${pendingReviews.length} review(s) awaiting approval</p></div>`:''}
       </div>
@@ -358,7 +389,7 @@ function renderRentCollection(){
     <select class="form-control" id="rc-month" style="width:160px" onchange="renderRentCollectionTable()">
       ${months.map(m=>`<option value="${m}" ${m===currentMonth?'selected':''}>${m}</option>`).join('')}
     </select>
-    <button class="btn btn-primary btn-sm" onclick="sendDueReminders()"><i class="fas fa-bell"></i> Send Reminders</button>
+    <button class="btn btn-primary btn-sm" onclick="sendDueReminders()"><i class="fas fa-bell"></i> Send Broadcast Reminders</button>
     <button class="btn btn-secondary btn-sm" onclick="exportFinance()"><i class="fas fa-download"></i> Export</button>
   </div>
   <div class="card" id="rc-table-wrap">
@@ -381,21 +412,49 @@ function renderRCTable(month, tenants, payments){
       <span style="color:var(--text2)">₹${collected.toLocaleString()} / ₹${total.toLocaleString()} (${pct}%)</span>
     </div>
   </div>
+  
   <div class="progress-bar" style="margin-bottom:20px"><div class="progress-fill" style="width:${pct}%;background:linear-gradient(90deg,var(--success),#34d399)"></div></div>
+  
+  <!-- Floating/Inline Bulk Actions Bar -->
+  <div id="rc-bulk-actions" style="margin-bottom: 16px; display: none; align-items: center; gap: 12px; background: rgba(124,58,237,0.08); padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(124,58,237,0.18)">
+    <span style="font-size: 13.5px; font-weight: 600; color: var(--text)" id="rc-selected-count">0 tenants selected</span>
+    <button class="btn btn-primary btn-sm" onclick="sendSelectedReminders('${month}')"><i class="fas fa-paper-plane"></i> Send Reminders to Selected</button>
+  </div>
+  
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Tenant</th><th>Room</th><th>Rent</th><th>Status</th><th>Paid On</th><th>Mode</th><th>Action</th></tr></thead>
+      <thead>
+        <tr>
+          <th style="width: 40px; text-align: center;"><input type="checkbox" id="rc-select-all" onclick="toggleSelectAllRCTenants(this)" /></th>
+          <th>Tenant</th>
+          <th>Room</th>
+          <th>Rent</th>
+          <th>Status</th>
+          <th>Paid On</th>
+          <th>Mode</th>
+          <th>Action</th>
+        </tr>
+      </thead>
       <tbody>
         ${tenants.map(t=>{
           const p=payments.find(p=>p.tenantId===t.id&&p.month===month);
+          const isPaid = p && p.status === 'paid';
           return `<tr>
+            <td style="text-align: center;">
+              ${isPaid ? '—' : `<input type="checkbox" class="rc-tenant-checkbox" data-tenant-id="${t.id}" onclick="updateRCSelectionCount()" />`}
+            </td>
             <td><strong>${t.name}</strong><div style="font-size:11px;color:var(--text3)">${t.mobile} - ${t.occupation}</div></td>
             <td>Room ${(t.roomId || '').replace('R','')} · Bed ${t.bedNo}</td>
             <td>₹${t.rent.toLocaleString()}</td>
             <td><span class="badge ${p&&p.status==='paid'?'badge-success':'badge-danger'}">${p?p.status:'not recorded'}</span></td>
             <td>${p&&p.paidOn||'—'}</td>
             <td>${p&&p.paymentMode||'—'}</td>
-            <td>${!p||p.status==='pending'?`<button class="btn btn-success btn-sm" onclick="${p?`recordPayment('${p.id}')`:''}">${p?'<i class="fas fa-check"></i> Mark Paid':'—'}</button>`:'<span style="color:var(--text3);font-size:12px">✓</span>'}</td>
+            <td>
+              <div style="display:flex;gap:6px;align-items:center">
+                ${!isPaid ? `<button class="btn btn-success btn-sm" title="Mark Paid" onclick="recordPayment('${p ? p.id : ''}')"><i class="fas fa-check"></i></button>` : '<span style="color:var(--success);font-size:12px">✓ Paid</span>'}
+                ${!isPaid ? `<button class="btn btn-secondary btn-sm" title="Send Reminder" onclick="sendIndividualReminder('${t.id}', '${month}')"><i class="fas fa-bell"></i></button>` : ''}
+              </div>
+            </td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -475,13 +534,156 @@ function toggleDemoSwitcher(){
   }
 }
 
+// ===================== GUEST REMINDERS PANEL =====================
+function renderGuestReminders() {
+  const user = getCurrentUser();
+  if (!user) return `<div class="empty-state"><i class="fas fa-user-slash"></i><p>Please login first.</p></div>`;
+
+  const tenants = DB.get('tenants') || [];
+  const dbRecord = user.dbRecord || {};
+
+  // --- Robust cross-table matching ---
+  // LoginMaster has: userName, mobile_Number
+  // RoomWise_MemberList (tenants) has: name (=Tenant_Name), mobile (=Mobile_No)
+  // Try: exact name match first, then mobile match
+  const loginName   = (dbRecord.userName   || user.name  || '').trim().toLowerCase();
+  const loginMobile = (dbRecord.mobile_Number || user.mobile || '').replace(/\D/g,'');
+
+  let guestTenant = null;
+
+  // 1. Match by BOTH name AND mobile
+  if (loginName && loginMobile) {
+    guestTenant = tenants.find(t => {
+      const tName   = (t.name   || '').trim().toLowerCase();
+      const tMobile = (t.mobile || '').replace(/\D/g,'');
+      return tName === loginName && tMobile === loginMobile;
+    });
+  }
+  // 2. Match by name only
+  if (!guestTenant && loginName) {
+    guestTenant = tenants.find(t => (t.name || '').trim().toLowerCase() === loginName);
+  }
+  // 3. Match by mobile only
+  if (!guestTenant && loginMobile) {
+    guestTenant = tenants.find(t => (t.mobile || '').replace(/\D/g,'') === loginMobile);
+  }
+  // 4. Use cached tenantId from session
+  if (!guestTenant && user.tenantId) {
+    guestTenant = tenants.find(t => t.id === user.tenantId);
+  }
+
+  if (!guestTenant) {
+    return `
+    <div class="page-header">
+      <h1><i class="fas fa-bell" style="color:var(--accent)"></i> Payment Reminders</h1>
+      <p>Notifications and dues for your account</p>
+    </div>
+    <div class="card" style="text-align:center;padding:48px 24px;border:1px solid var(--border);border-radius:24px;background:var(--card)">
+      <div style="width:72px;height:72px;background:rgba(245,158,11,0.1);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--accent);margin:0 auto 20px;animation:pulse 2s infinite;">
+        <i class="fas fa-user-clock"></i>
+      </div>
+      <h3 style="margin-bottom:8px;font-family:'Poppins',sans-serif;font-size:18px;">No PG Tenant Record Found</h3>
+      <p style="color:var(--text2);font-size:13.5px;max-width:480px;margin:0 auto 20px;line-height:1.6;">
+        Your guest account (username: <strong style="color:var(--primary-light)">${user.name}</strong>) is not currently linked to an active PG resident profile in our tenant database.
+      </p>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 16px;max-width:480px;margin:0 auto;text-align:left;font-size:12.5px;color:var(--text3);line-height:1.5;">
+        <i class="fas fa-info-circle" style="color:var(--primary-light);margin-right:6px"></i>
+        If you have checked in recently, please make sure the PG Admin has added your record in the <strong>RoomWise_MemberList</strong> table matching your name (<strong>Nag</strong>) or mobile number.
+      </div>
+    </div>`;
+  }
+  
+  const payments = (DB.get('payments')||[]).filter(p => p.tenantId === guestTenant.id);
+  const pendingPayments = payments.filter(p => p.status === 'pending');
+  const allNotifications = DB.get('notifications') || [];
+  const reminders = allNotifications.filter(n => n.to === guestTenant.id && (n.type === 'due' || n.type === 'payment'));
+  
+  return `
+  <div class="page-header">
+    <h1><i class="fas fa-bell" style="color:var(--accent)"></i> Payment Reminders</h1>
+    <p>Logged in as: <strong style="color:var(--primary-light)">${user.name}</strong> · Resident Profile Link Verified</p>
+  </div>
+  
+  <div class="stats-grid">
+    <div class="stat-card purple">
+      <div class="stat-icon purple"><i class="fas fa-door-open"></i></div>
+      <div class="stat-value">Room ${(guestTenant.roomId || '').replace('R','')}</div>
+      <div class="stat-label">Bed Assigned: ${guestTenant.bedNo}</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-icon green"><i class="fas fa-rupee-sign"></i></div>
+      <div class="stat-value">₹${guestTenant.rent.toLocaleString()}</div>
+      <div class="stat-label">Monthly Rent</div>
+    </div>
+    <div class="stat-card pink">
+      <div class="stat-icon pink"><i class="fas fa-clock"></i></div>
+      <div class="stat-value">${pendingPayments.length}</div>
+      <div class="stat-label">Pending Dues</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="stat-icon amber"><i class="fas fa-shield-alt"></i></div>
+      <div class="stat-value">₹${guestTenant.deposit.toLocaleString()}</div>
+      <div class="stat-label">Security Deposit</div>
+    </div>
+  </div>
+  
+  <div class="grid-2">
+    <!-- Pending Dues Card -->
+    <div class="card">
+      <div class="card-title" style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Pending Rent / Dues</div>
+      ${pendingPayments.length === 0 ? `
+        <div style="text-align:center;padding:48px 10px;color:var(--success)">
+          <i class="fas fa-check-circle" style="font-size:42px;margin-bottom:12px;display:block"></i>
+          <span style="font-weight:600;font-size:14px">All Settled! No pending dues.</span>
+        </div>` : 
+        pendingPayments.map(p => `
+        <div class="due-item" style="padding:14px 0;">
+          <div>
+            <div style="font-weight:700;font-size:14px;color:var(--text)">Rent for ${p.month}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;"><i class="far fa-calendar-alt"></i> Due Date: ${formatDate(p.dueDate)}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:800;font-size:17px;color:var(--danger);margin-bottom:6px">₹${p.amount.toLocaleString()}</div>
+            <button class="btn btn-primary btn-sm" onclick="triggerTenantPaymentGateway('${p.id}')">
+              <i class="fas fa-credit-card"></i> Pay Now
+            </button>
+          </div>
+        </div>`).join('')}
+    </div>
+    
+    <!-- Reminders Feed -->
+    <div class="card">
+      <div class="card-title"><i class="fas fa-history"></i> Reminders &amp; Alerts</div>
+      ${reminders.length === 0 ? `
+        <div class="empty-state" style="padding:48px 10px;">
+          <i class="fas fa-bell-slash" style="font-size:32px;margin-bottom:12px;opacity:0.3"></i>
+          <p style="font-size:13px;color:var(--text3)">No reminder notifications sent yet.</p>
+        </div>` : 
+        reminders.sort((a,b) => new Date(b.date) - new Date(a.date)).map(n => `
+        <div class="due-item" style="padding:12px 0;">
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="width:34px;height:34px;border-radius:8px;background:${n.type==='due'?'rgba(245,158,11,.15)':'rgba(16,185,129,.15)'};color:${n.type==='due'?'var(--accent)':'var(--success)'};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">
+              <i class="fas fa-${n.type==='due'?'bell':'check-circle'}"></i>
+            </div>
+            <div style="flex:1">
+              <strong style="font-size:13.5px;color:var(--text)">${n.title}</strong>
+              <p style="font-size:12.5px;color:var(--text2);margin-top:4px;line-height:1.4">${n.message}</p>
+              <span style="font-size:10.5px;color:var(--text3);margin-top:6px;display:block;"><i class="far fa-clock"></i> ${formatDate(n.date)}</span>
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
 // ---- Boot ----
-window.addEventListener('DOMContentLoaded', ()=>{
-  if(restoreSession()){
+window.addEventListener('DOMContentLoaded', () => {
+  if (restoreSession()) {
     initApp();
   } else {
-    setTimeout(()=>{
-      document.getElementById('page-loader').classList.add('fade-out');
+    setTimeout(() => {
+      const loader = document.getElementById('page-loader');
+      if (loader) loader.classList.add('fade-out');
       setTimeout(renderLoginPage, 500);
     }, 2000);
   }

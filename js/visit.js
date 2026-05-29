@@ -109,7 +109,7 @@ function renderVisitPage(){
               </div>
             </div>
           </div>`).join('')}
-      </div>`:''}
+      </div>` : renderGuestVisits()}
     </div>
   </div>`;
 }
@@ -135,7 +135,8 @@ function selectSlot(el, time){
   document.getElementById('v-time').value = time;
 }
 
-function bookVisit(){
+async function bookVisit(){
+  const user = getCurrentUser();
   const name=document.getElementById('v-name').value.trim();
   const mobile=document.getElementById('v-mobile').value.trim();
   const date=document.getElementById('v-date').value;
@@ -146,34 +147,149 @@ function bookVisit(){
   if(!/^[6-9]\d{9}$/.test(mobile)){ showToast('Enter valid mobile','error'); return; }
   if(!date){ showToast('Select a date','error'); return; }
   if(!time){ showToast('Select a time slot','error'); return; }
-  const visits=DB.get('visits')||[];
-  visits.push({id:genId('V'),name,mobile,date,time,purpose,notes,status:'pending',bookedOn:new Date().toISOString().slice(0,10)});
-  DB.set('visits',visits);
-  addNotification({to:'admin',type:'visit',title:'New Visit Booking',message:`${name} (${mobile}) has booked a visit on ${formatDate(date)} at ${time}. Purpose: ${purpose}`});
-  showToast('Visit booked! We will confirm shortly.','success');
-  // Reset form
-  document.getElementById('v-name').value='';
-  document.getElementById('v-mobile').value='';
-  document.getElementById('v-date').value='';
-  document.getElementById('v-time').value='';
-  document.querySelectorAll('.slot-btn').forEach(b=>b.classList.remove('selected'));
+
+  showToast('Booking visit in database...', 'info');
+
+  try {
+    const newVisit = {
+      name,
+      mobile,
+      date,
+      time,
+      purpose,
+      notes,
+      status: 'pending',
+      bookedOn: new Date().toISOString().slice(0,10),
+      visitor_id: user ? user.id : 'guest'
+    };
+
+    const res = await saveNewVisitToDB(newVisit);
+    
+    // Save this visit's DB ID in guest local storage
+    const myVisits = DB.get('my_visits') || [];
+    if (res && res[0]) {
+      myVisits.push(res[0].id);
+      DB.set('my_visits', myVisits);
+    }
+
+    addNotification({to:'admin',type:'visit',title:'New Visit Booking',message:`${name} (${mobile}) has booked a visit on ${formatDate(date)} at ${time}. Purpose: ${purpose}`});
+    showToast('Visit booked successfully! We will confirm shortly.','success');
+    
+    // Reset form
+    document.getElementById('v-name').value='';
+    document.getElementById('v-mobile').value='';
+    document.getElementById('v-date').value='';
+    document.getElementById('v-time').value='';
+    document.querySelectorAll('.slot-btn').forEach(b=>b.classList.remove('selected'));
+    
+    navigateTo('visit');
+  } catch (err) {
+    console.error('Book visit error:', err);
+    showToast('Could not save booking to database', 'error');
+  }
 }
 
-function confirmVisit(id){
-  const visits=DB.get('visits')||[];
-  const v=visits.find(v=>v.id===id);
-  if(v) v.status='confirmed';
-  DB.set('visits',visits);
-  addNotification({to:'admin',type:'visit',title:'Visit Confirmed',message:`Visit for ${v.name} on ${formatDate(v.date)} at ${v.time} confirmed.`});
-  showToast('Visit confirmed!','success');
-  navigateTo('visit');
+async function confirmVisit(id){
+  const visits = DB.get('visits') || [];
+  const v = visits.find(v => v.id === id);
+  if (v) {
+    try {
+      showToast('Confirming visit in database...', 'info');
+      await updateVisitStatusInDB(v.db_id, 'confirmed');
+      
+      addNotification({to:'admin',type:'visit',title:'Visit Confirmed',message:`Visit for ${v.name} on ${formatDate(v.date)} at ${v.time} confirmed.`});
+      
+      if (v.visitor_id && v.visitor_id !== 'guest') {
+        addNotification({
+          to: v.visitor_id,
+          type: 'visit',
+          title: 'Visit Approved & Confirmed! 🎉',
+          message: `Your requested visit on ${formatDate(v.date)} at ${v.time} has been approved and confirmed. We look forward to seeing you!`
+        });
+      }
+      
+      showToast('Visit confirmed successfully!','success');
+      navigateTo('visit');
+    } catch (err) {
+      console.error('Confirm visit error:', err);
+      showToast('Failed to confirm visit in database', 'error');
+    }
+  }
 }
 
-function cancelVisit(id){
-  const visits=DB.get('visits')||[];
-  const v=visits.find(v=>v.id===id);
-  if(v) v.status='cancelled';
-  DB.set('visits',visits);
-  showToast('Visit cancelled','warning');
-  navigateTo('visit');
+async function cancelVisit(id){
+  const visits = DB.get('visits') || [];
+  const v = visits.find(v => v.id === id);
+  if (v) {
+    try {
+      showToast('Cancelling visit in database...', 'info');
+      await updateVisitStatusInDB(v.db_id, 'cancelled');
+      showToast('Visit cancelled','warning');
+      navigateTo('visit');
+    } catch (err) {
+      console.error('Cancel visit error:', err);
+      showToast('Failed to cancel visit in database', 'error');
+    }
+  }
+}
+
+function renderGuestVisits() {
+  const user = getCurrentUser();
+  const allVisits = DB.get('visits') || [];
+  const myVisitIds = DB.get('my_visits') || [];
+  
+  const myVisits = allVisits.filter(v => {
+    if (user && user.mobile && v.mobile === user.mobile) return true;
+    if (user && user.id && v.visitor_id === user.id) return true;
+    if (myVisitIds.includes(v.db_id) || myVisitIds.includes(parseInt(v.id.replace('V','')))) return true;
+    return false;
+  });
+  
+  if (myVisits.length === 0) {
+    return '';
+  }
+  
+  return `
+  <div class="card" style="margin-top: 16px;">
+    <div class="card-title"><i class="fas fa-calendar-check"></i> My Scheduled Visits</div>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      ${myVisits.map(v => {
+        let statusBadge = '';
+        let infoMessage = '';
+        if (v.status === 'pending') {
+          statusBadge = '<span class="badge badge-warning">Pending Approval</span>';
+          infoMessage = '<p style="font-size:12px;color:var(--text3);margin-top:6px;"><i class="fas fa-info-circle"></i> Our team is reviewing your visit request. You will see an update here once confirmed.</p>';
+        } else if (v.status === 'confirmed') {
+          statusBadge = '<span class="badge badge-success">Approved &amp; Confirmed</span>';
+          infoMessage = `
+            <div style="margin-top:8px;padding:10px;background:rgba(16,185,129,.08);border-radius:8px;border:1px solid rgba(16,185,129,.15)">
+              <p style="font-size:12px;color:var(--success);line-height:1.4;margin:0">
+                <i class="fas fa-check-circle"></i> <strong>Approved!</strong> We are excited to meet you! Please arrive on time at the scheduled slot.
+              </p>
+              <p style="font-size:11.5px;color:var(--text2);margin:4px 0 0 0">
+                <strong>Directions &amp; Contact:</strong> U. Navya (<a href="tel:8790027362" style="color:var(--primary-light);text-decoration:none">87900 27362</a>, <a href="tel:9741531077" style="color:var(--primary-light);text-decoration:none">97415 31077</a>).
+              </p>
+            </div>`;
+        } else {
+          statusBadge = '<span class="badge badge-danger">Cancelled</span>';
+          infoMessage = '<p style="font-size:12px;color:var(--danger);margin-top:6px;"><i class="fas fa-times-circle"></i> This visit request was cancelled.</p>';
+        }
+        
+        return `
+        <div style="padding:14px;background:var(--bg3);border-radius:12px;border:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+            <div>
+              <div style="font-weight:600;font-size:14px;color:var(--text);">${v.name}</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px"><i class="fas fa-calendar-alt"></i> ${formatDate(v.date)} at <strong>${v.time}</strong></div>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px"><i class="fas fa-question-circle"></i> Purpose: ${v.purpose}</div>
+            </div>
+            <div>
+              ${statusBadge}
+            </div>
+          </div>
+          ${infoMessage}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
 }

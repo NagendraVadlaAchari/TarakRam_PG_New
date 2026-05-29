@@ -443,7 +443,8 @@ function triggerTenantPaymentGateway(payId){
     
     addNotification({to:p.tenantId,type:'payment',title:'Rent Payment Success',message:`Your rent of ₹${p.amount.toLocaleString()} for ${p.month} has been cleared via ${method}. Txn: ${txnId}.`});
     showToast('Rent Paid Successfully!','success');
-    navigateTo('finance');
+    const user = getCurrentUser();
+    navigateTo(user.role === 'guest' ? 'reminders' : 'finance');
   });
 }
 
@@ -529,6 +530,77 @@ function sendDueReminders(){
   });
   addNotification({to:'admin',type:'due',title:'Reminders Sent',message:`Due reminders sent to ${tenantIds.length} tenants.`});
   showToast(`Reminders sent to ${tenantIds.length} tenants!`,'success');
+}
+
+function sendIndividualReminder(tenantId, month) {
+  const tenants = DB.get('tenants') || [];
+  const t = tenants.find(x => x.id === tenantId);
+  if (!t) return;
+  
+  addNotification({
+    to: tenantId,
+    type: 'due',
+    title: 'Rent Due Reminder',
+    message: `Dear ${t.name}, your rent of ₹${t.rent.toLocaleString()} for ${month} is pending. Please complete your payment at the earliest to avoid late fees.`
+  });
+  
+  showToast(`Reminder sent to ${t.name} successfully!`, 'success');
+}
+
+function sendSelectedReminders(month) {
+  const checkboxes = document.querySelectorAll('.rc-tenant-checkbox:checked');
+  const selectedIds = Array.from(checkboxes).map(cb => cb.getAttribute('data-tenant-id'));
+  
+  if (selectedIds.length === 0) {
+    showToast('Please select at least one tenant.', 'warning');
+    return;
+  }
+  
+  const tenants = DB.get('tenants') || [];
+  let sentCount = 0;
+  
+  selectedIds.forEach(id => {
+    const t = tenants.find(x => x.id === id);
+    if (t) {
+      addNotification({
+        to: id,
+        type: 'due',
+        title: 'Rent Due Reminder',
+        message: `Dear ${t.name}, your rent of ₹${t.rent.toLocaleString()} for ${month} is pending. Please complete your payment at the earliest.`
+      });
+      sentCount++;
+    }
+  });
+  
+  showToast(`Payment reminders sent to ${sentCount} selected tenants!`, 'success');
+  
+  // Clear checkboxes
+  document.querySelectorAll('.rc-tenant-checkbox').forEach(cb => cb.checked = false);
+  const selectAll = document.getElementById('rc-select-all');
+  if (selectAll) selectAll.checked = false;
+  updateRCSelectionCount();
+}
+
+function toggleSelectAllRCTenants(headerCb) {
+  const checkboxes = document.querySelectorAll('.rc-tenant-checkbox');
+  checkboxes.forEach(cb => cb.checked = headerCb.checked);
+  updateRCSelectionCount();
+}
+
+function updateRCSelectionCount() {
+  const checkboxes = document.querySelectorAll('.rc-tenant-checkbox:checked');
+  const count = checkboxes.length;
+  const bar = document.getElementById('rc-bulk-actions');
+  const label = document.getElementById('rc-selected-count');
+  
+  if (bar && label) {
+    if (count > 0) {
+      bar.style.display = 'flex';
+      label.textContent = `${count} tenant${count > 1 ? 's' : ''} selected`;
+    } else {
+      bar.style.display = 'none';
+    }
+  }
 }
 
 function renderTenantFinance(){
