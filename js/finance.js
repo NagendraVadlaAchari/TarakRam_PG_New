@@ -544,6 +544,14 @@ function sendIndividualReminder(tenantId, month) {
     message: `Dear ${t.name}, your rent of ₹${t.rent.toLocaleString()} for ${month} is pending. Please complete your payment at the earliest to avoid late fees.`
   });
   
+  // WhatsApp Integration
+  if (t.mobile) {
+    const waNumber = t.mobile.replace(/[^0-9]/g, '');
+    const waMessage = `Dear ${t.name}, your rent of ₹${t.rent.toLocaleString()} for ${month} is pending at SLV PG. Please complete your payment at the earliest. Thank you!`;
+    const waUrl = `https://api.whatsapp.com/send?phone=${waNumber}&text=${encodeURIComponent(waMessage)}`;
+    window.open(waUrl, '_blank');
+  }
+  
   showToast(`Reminder sent to ${t.name} successfully!`, 'success');
 }
 
@@ -559,7 +567,7 @@ function sendSelectedReminders(month) {
   const tenants = DB.get('tenants') || [];
   let sentCount = 0;
   
-  selectedIds.forEach(id => {
+  selectedIds.forEach((id, index) => {
     const t = tenants.find(x => x.id === id);
     if (t) {
       addNotification({
@@ -568,6 +576,18 @@ function sendSelectedReminders(month) {
         title: 'Rent Due Reminder',
         message: `Dear ${t.name}, your rent of ₹${t.rent.toLocaleString()} for ${month} is pending. Please complete your payment at the earliest.`
       });
+      
+      // WhatsApp Integration (sequential delayed popup to avoid browser blocks)
+      if (t.mobile) {
+        const waNumber = t.mobile.replace(/[^0-9]/g, '');
+        const waMessage = `Dear ${t.name}, your rent of ₹${t.rent.toLocaleString()} for ${month} is pending at SLV PG. Please complete your payment at the earliest. Thank you!`;
+        const waUrl = `https://api.whatsapp.com/send?phone=${waNumber}&text=${encodeURIComponent(waMessage)}`;
+        
+        setTimeout(() => {
+          window.open(waUrl, '_blank');
+        }, index * 1000);
+      }
+      
       sentCount++;
     }
   });
@@ -781,13 +801,6 @@ function renderExpensesSection(){
           </div>
         </div>
       </div>
-      
-      <div style="background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(124,58,237,.05));border:1px dashed var(--success);border-radius:12px;padding:12px;margin-top:14px;display:flex;align-items:center;gap:10px">
-        <div style="width:36px;height:36px;border-radius:50%;background:rgba(16,185,129,.2);color:var(--success);display:flex;align-items:center;justify-content:center;font-size:18px"><i class="fas fa-database"></i></div>
-        <div style="font-size:11.5px;line-height:1.3;color:var(--text2)">
-          <strong>Supabase Direct Sync Active</strong><br/><span style="color:var(--text3)">Changes propagate instantly to remote PostgreSQL servers.</span>
-        </div>
-      </div>
     </div>
   </div>
   
@@ -805,10 +818,11 @@ function renderExpensesSection(){
             <th>Amount</th>
             <th>Method</th>
             <th>Paid By</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          ${filtered.length === 0 ? `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:30px"><i class="fas fa-receipt" style="font-size:24px;margin-bottom:8px"></i><br/>No expense records found for this period.</td></tr>` :
+          ${filtered.length === 0 ? `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:30px"><i class="fas fa-receipt" style="font-size:24px;margin-bottom:8px"></i><br/>No expense records found for this period.</td></tr>` :
           filtered.map(e => `
           <tr>
             <td><code style="color:var(--accent);font-weight:600;font-size:12px">${e.txnId}</code></td>
@@ -818,6 +832,11 @@ function renderExpensesSection(){
             <td><strong style="color:var(--danger)">₹${e.amount.toLocaleString()}</strong></td>
             <td><span style="font-size:12px;color:var(--text2)"><i class="fas fa-${e.paymentMethod==='UPI'?'mobile-alt':e.paymentMethod==='Cash'?'money-bill-wave':'credit-card'}"></i> ${e.paymentMethod}</span></td>
             <td><span class="badge badge-purple">${e.paidBy}</span></td>
+            <td>
+              <button class="btn btn-primary btn-sm" onclick="showEditExpenseModal('${e.id}')">
+                <i class="fas fa-edit"></i> Edit
+              </button>
+            </td>
           </tr>`).join('')}
         </tbody>
       </table>
@@ -920,4 +939,85 @@ function exportExpensesCSV(){
   });
   downloadCSV(csv, 'tarakram_expenses_report.csv');
   showToast('Expenses CSV downloaded!', 'success');
+}
+
+function showEditExpenseModal(id){
+  const expenses = dbExpenses || DB.get('expenses') || [];
+  const e = expenses.find(x => String(x.id) === String(id));
+  if (!e) {
+    showToast('Expense not found', 'error');
+    return;
+  }
+  
+  showModal('Edit Daily Outflow / Expense', `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Transaction ID *</label><input class="form-control" id="ex-txn" value="${e.txnId}" /></div>
+      <div class="form-group"><label class="form-label">Date *</label><input class="form-control" type="date" id="ex-date" value="${e.date}" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Category *</label>
+        <select class="form-control" id="ex-category">
+          ${['Food & Groceries', 'Maintenance & Repairs', 'Electricity & Water', 'Staff Salaries', 'Marketing & Ads', 'Others'].map(cat => 
+            `<option ${e.category === cat ? 'selected' : ''}>${cat}</option>`
+          ).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Payment Method *</label>
+        <select class="form-control" id="ex-method">
+          ${['UPI', 'Cash', 'Card', 'NEFT'].map(method => 
+            `<option ${e.paymentMethod === method ? 'selected' : ''}>${method}</option>`
+          ).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Amount (₹) *</label><input class="form-control" type="number" id="ex-amount" value="${e.amount}" placeholder="e.g. 1500" /></div>
+      <div class="form-group"><label class="form-label">Paid By *</label><input class="form-control" id="ex-paidby" value="${e.paidBy}" placeholder="Manager/Admin" /></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Item / Expenditure Details *</label>
+      <textarea class="form-control" id="ex-details" rows="3" placeholder="Provide description..." style="height:auto;padding:10px">${e.itemDetails}</textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="updateExpense('${e.id}')"><i class="fas fa-save"></i> Update Outflow</button>
+    </div>`, false);
+}
+
+async function updateExpense(id){
+  const txnId = document.getElementById('ex-txn').value.trim();
+  const date = document.getElementById('ex-date').value;
+  const category = document.getElementById('ex-category').value;
+  const itemDetails = document.getElementById('ex-details').value.trim();
+  const amount = parseFloat(document.getElementById('ex-amount').value);
+  const paidBy = document.getElementById('ex-paidby').value.trim();
+  const paymentMethod = document.getElementById('ex-method').value;
+  
+  if(!txnId || !date || !category || !itemDetails || isNaN(amount) || amount <= 0 || !paidBy){
+     showToast('Please fill all required fields correctly', 'error');
+     return;
+  }
+  
+  showToast('Updating expense in database...', 'info');
+  
+  try {
+     const updatedExpense = {
+        txnId,
+        date,
+        category,
+        itemDetails,
+        amount,
+        paymentMethod,
+        paidBy
+     };
+     
+     await updateExpenseInDB(id, updatedExpense);
+     
+     closeModal();
+     showToast('Daily expense successfully updated in PostgreSQL!', 'success');
+     navigateTo('finance');
+  } catch(err) {
+     console.error('Update expense error:', err);
+     showToast(`Failed to update expense in DB: ${err.message}`, 'error');
+  }
 }

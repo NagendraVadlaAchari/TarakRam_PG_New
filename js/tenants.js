@@ -271,11 +271,33 @@ function vacateTenant(id){
   if(!confirm(`Are you sure you want to vacate this tenant?`)) return;
   const tenants=DB.get('tenants')||[];
   const t=tenants.find(t=>t.id===id);
-  if(t){ t.status='vacated'; t.vacatedOn=new Date().toISOString().slice(0,10); }
-  DB.set('tenants',tenants);
-  closeModal();
-  showToast('Tenant vacated','warning');
-  navigateTo('tenants');
+  if(t){
+    t.status='vacated';
+    t.vacatedOn=new Date().toISOString().slice(0,10);
+    closeModal();
+    
+    if(t.db_id){
+      showToast('Deleting tenant from database...', 'info');
+      deleteTenantFromDB(t.db_id)
+        .then(()=>{
+          console.log('[DB] ✅ Tenant deleted from RoomWise_MemberList');
+          const updatedTenants = (DB.get('tenants')||[]).filter(item => item.id !== id);
+          DB.set('tenants', updatedTenants);
+          showToast('Tenant checked out and deleted from database!','warning');
+          navigateTo('tenants');
+        })
+        .catch(err=>{
+          console.error('[DB] ❌ Failed to delete tenant from DB:', err.message);
+          showToast('Saved locally, database delete failed: '+err.message,'warning');
+          DB.set('tenants',tenants);
+          navigateTo('tenants');
+        });
+    } else {
+      DB.set('tenants',tenants);
+      showToast('Tenant vacated locally','warning');
+      navigateTo('tenants');
+    }
+  }
 }
 
 function editTenant(id){

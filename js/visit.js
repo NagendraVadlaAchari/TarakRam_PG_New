@@ -173,6 +173,19 @@ async function bookVisit(){
     }
 
     addNotification({to:'admin',type:'visit',title:'New Visit Booking',message:`${name} (${mobile}) has booked a visit on ${formatDate(date)} at ${time}. Purpose: ${purpose}`});
+    
+    // WhatsApp Booking Notification
+    try {
+      if (typeof WHATSAPP_CONFIG !== 'undefined' && WHATSAPP_CONFIG.adminNumber) {
+        const waNumber = WHATSAPP_CONFIG.adminNumber.replace(/[^0-9]/g, '');
+        const waMessage = `Hello Admin, a new site visit booking has been scheduled at SLV PG:\n\n👤 Name: ${name}\n📱 Mobile: ${mobile}\n📅 Date: ${formatDate(date)}\n⏰ Time: ${time}\n🎯 Purpose: ${purpose}\n📝 Notes: ${notes || 'None'}`;
+        const waUrl = `https://api.whatsapp.com/send?phone=${waNumber}&text=${encodeURIComponent(waMessage)}`;
+        window.open(waUrl, '_blank');
+      }
+    } catch (waErr) {
+      console.warn('[WhatsApp] Notification dispatcher failed:', waErr);
+    }
+
     showToast('Visit booked successfully! We will confirm shortly.','success');
     
     // Reset form

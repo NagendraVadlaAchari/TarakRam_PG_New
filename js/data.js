@@ -17,6 +17,12 @@ const SUPABASE_CONFIG = {
   apiKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3dGtsaW5vZ3JhcGphem1rbGJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMzY3NjYsImV4cCI6MjA5NDkxMjc2Nn0.M2xt4dbfpnOeXwKZfdtcZNSDM1wb1Bo5TbOAe5jY9Sk'
 };
 
+// ===================== WHATSAPP CONFIGURATION =====================
+const WHATSAPP_CONFIG = {
+  // Number to receive notifications when a guest sends a visit booking
+  adminNumber: '+91-9492947038'
+};
+
 let dbRoomsLoaded = false;
 let dbRoomsLoading = false;
 let dbRoomsError = null;
@@ -180,6 +186,13 @@ async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate
   return await supabaseRequest('RoomWise_MemberList', queryParams, 'PATCH', body);
 }
 
+// Delete tenant from PostgreSQL RoomWise_MemberList
+async function deleteTenantFromDB(dbId) {
+  if (!dbId) throw new Error('No DB ID provided for tenant deletion');
+  const queryParams = `id=eq.${dbId}`;
+  return await supabaseRequest('RoomWise_MemberList', queryParams, 'DELETE');
+}
+
 
 // Load rooms from Supabase and store in localStorage for seamless use
 async function loadRoomsFromDB() {
@@ -256,6 +269,24 @@ async function saveNewExpenseToDB(expense) {
     PaidBy: expense.paidBy
   };
   const result = await supabaseRequest('TarakRam_ExpensesDetails', '', 'POST', body);
+  await loadExpensesFromDB();
+  return result;
+}
+
+// Update existing expense in TarakRam_ExpensesDetails
+async function updateExpenseInDB(dbId, expense) {
+  if (!dbId) throw new Error('No DB ID provided for expense update');
+  const queryParams = `id=eq.${dbId}`;
+  const body = {
+    TransactionID: expense.txnId,
+    Date: expense.date,
+    Category: expense.category,
+    ItemDetails: expense.itemDetails,
+    Amount: parseFloat(expense.amount) || 0,
+    PaymentMethod: expense.paymentMethod,
+    PaidBy: expense.paidBy
+  };
+  const result = await supabaseRequest('TarakRam_ExpensesDetails', queryParams, 'PATCH', body);
   await loadExpensesFromDB();
   return result;
 }
