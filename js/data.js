@@ -72,10 +72,12 @@ async function fetchDBRooms() {
     const rooms = roomRows.map(row => {
       const roomMembers = memberRows.filter(m => m.Room_No === row.Room_No);
       const rNumStr = String(row.Room_No);
-      // Premium AC Rooms end in .01 or .02 (or 101, 102, 201, 202, etc.)
+      // Determine AC/Non-AC type based on room number suffix
       const isAC = rNumStr.endsWith('01') || rNumStr.endsWith('02') || rNumStr.endsWith('.01') || rNumStr.endsWith('.02');
       const type = isAC ? 'AC' : 'Non-AC';
-      const rent = isAC ? 8000 : 6000;
+      // Read rent from Room_Rent column; fall back to type-based default if not set
+      const rentFromDB = row.Room_Rent ? parseFloat(row.Room_Rent) : null;
+      const rent = rentFromDB || (isAC ? 8000 : 6000);
 
       return {
         id: `R${row.Room_No}`,
@@ -128,19 +130,20 @@ async function getNextTenantId() {
 }
 
 // Save new room in PostgreSQL
-async function saveNewRoomToDB(roomNumber, floor, capacity) {
+async function saveNewRoomToDB(roomNumber, floor, capacity, rent) {
   const nextId = await getNextRoomId();
   const body = {
     id: nextId,
     Room_No: String(roomNumber),
     Floor_No: String(floor),
-    Room_Capacity: String(capacity)
+    Room_Capacity: String(capacity),
+    Room_Rent: rent ? parseFloat(rent) : null
   };
   return await supabaseRequest('TarakRam_RoomDetails', '', 'POST', body);
 }
 
 // Update existing room in PostgreSQL
-async function updateRoomInDB(dbId, originalRoomNo, newRoomNo, floor, capacity) {
+async function updateRoomInDB(dbId, originalRoomNo, newRoomNo, floor, capacity, rent) {
   let queryParams = '';
   if (dbId) {
     queryParams = `id=eq.${dbId}`;
@@ -151,7 +154,8 @@ async function updateRoomInDB(dbId, originalRoomNo, newRoomNo, floor, capacity) 
   const body = {
     Room_No: String(newRoomNo),
     Floor_No: String(floor),
-    Room_Capacity: String(capacity)
+    Room_Capacity: String(capacity),
+    Room_Rent: rent ? parseFloat(rent) : null
   };
   return await supabaseRequest('TarakRam_RoomDetails', queryParams, 'PATCH', body);
 }

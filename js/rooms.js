@@ -220,8 +220,8 @@ async function updateRoom(roomId){
   showToast('Updating room in database...', 'info');
 
   try {
-    // 1. Sync to remote PostgreSQL
-    await updateRoomInDB(room.db_id, originalRoomNo, num, floor, beds);
+    // 1. Sync to remote PostgreSQL — now includes Room_Rent
+    await updateRoomInDB(room.db_id, originalRoomNo, num, floor, beds, rent);
 
     // 2. Sync local memory
     room.number = num;
@@ -269,8 +269,8 @@ async function addRoom(){
   showToast('Saving new room to database...', 'info');
 
   try {
-    // 1. Sync to remote PostgreSQL
-    const res = await saveNewRoomToDB(num, floor, beds);
+    // 1. Sync to remote PostgreSQL — now includes Room_Rent
+    const res = await saveNewRoomToDB(num, floor, beds, rent);
     const db_id = res && res[0] ? res[0].id : Date.now();
 
     // 2. Update local storage
