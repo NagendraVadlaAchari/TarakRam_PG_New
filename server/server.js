@@ -91,6 +91,37 @@ app.get('/api/tenants', async (req, res) => {
   }
 });
 
+// ---- POST /api/signup-notify — Send WhatsApp alert to Admin ----
+app.post('/api/signup-notify', async (req, res) => {
+  const { name, mobile, email, adminNumber, apiKey } = req.body;
+  console.log(`\n🆕 [Signup Notification] New registration:`);
+  console.log(`   👤 Name:   ${name}`);
+  console.log(`   📱 Mobile: ${mobile}`);
+  console.log(`   📧 Email:  ${email || 'Not provided'}`);
+
+  if (adminNumber && apiKey && apiKey !== 'YOUR_API_KEY_HERE') {
+    const https = require('https');
+    const cleanNumber = adminNumber.replace(/[^0-9]/g, '');
+    const waMsg = `🆕 New Sign-Up Alert!\n\n👤 Name: ${name}\n📱 Mobile: ${mobile}\n📧 Email: ${email || 'Not provided'}\n\nThis user has registered at PG app.`;
+    const url = `https://api.callmebot.com/whatsapp.php?phone=${cleanNumber}&text=${encodeURIComponent(waMsg)}&apikey=${apiKey}`;
+
+    console.log(`[WhatsApp Backend] Dispatching silent alert to ${cleanNumber}...`);
+    https.get(url, (apiRes) => {
+      let data = '';
+      apiRes.on('data', (chunk) => { data += chunk; });
+      apiRes.on('end', () => {
+        console.log(`[WhatsApp Backend] CallMeBot response status: ${apiRes.statusCode}. Body: ${data}`);
+      });
+    }).on('error', (err) => {
+      console.error(`[WhatsApp Backend] Dispatch error: ${err.message}`);
+    });
+  } else {
+    console.log(`[WhatsApp Backend] CallMeBot API key or number not configured. Skipping WhatsApp dispatch.`);
+  }
+
+  res.json({ success: true, message: 'Signup notification processed' });
+});
+
 // ---- GET /api/health — Health check ----
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', server: 'SLV PG API', timestamp: new Date().toISOString() });

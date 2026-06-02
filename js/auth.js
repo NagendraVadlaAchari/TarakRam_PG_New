@@ -524,21 +524,26 @@ async function handleSignup(){
       dbRecord: record
     };
 
-    // Silent WhatsApp notification to admin (no browser popup, no UI interruption)
+    // Call the admin backend API to register signup notification (silent, no browser popups)
     try {
-      if (typeof WHATSAPP_CONFIG !== 'undefined' && WHATSAPP_CONFIG.signupNotifyNumber) {
-        const waNum = WHATSAPP_CONFIG.signupNotifyNumber.replace(/[^0-9]/g, '');
-        const waMsg = `🆕 New Sign-Up Alert!\n\n👤 Name: ${name}\n📱 Mobile: ${mobile}\n📧 Email: ${email || 'Not provided'}\n🕐 Time: ${new Date().toLocaleString('en-IN')}\n\nThis user has registered at Tarak Ram PG app.`;
-        // Silent method: send via wa.me link in a hidden iframe (no window.open popup)
-        const silentFrame = document.createElement('iframe');
-        silentFrame.style.cssText = 'display:none;width:0;height:0;border:none;position:absolute;left:-9999px;top:-9999px';
-        silentFrame.src = `https://api.whatsapp.com/send?phone=${waNum}&text=${encodeURIComponent(waMsg)}`;
-        document.body.appendChild(silentFrame);
-        // Remove iframe after 5 seconds
-        setTimeout(() => { try { document.body.removeChild(silentFrame); } catch(e){} }, 5000);
-      }
-    } catch (waErr) {
-      console.warn('[Auth] Silent signup WhatsApp notification failed:', waErr);
+      const adminNum = (typeof WHATSAPP_CONFIG !== 'undefined' && WHATSAPP_CONFIG.signupNotifyNumber) ? WHATSAPP_CONFIG.signupNotifyNumber : '';
+      const apiKey = (typeof WHATSAPP_CONFIG !== 'undefined' && WHATSAPP_CONFIG.callmebotApiKey) ? WHATSAPP_CONFIG.callmebotApiKey : '';
+      
+      fetch('http://localhost:3001/api/signup-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name,
+          mobile: mobile,
+          email: email || '',
+          adminNumber: adminNum,
+          apiKey: apiKey
+        })
+      }).then(r => r.json())
+        .then(data => console.log('[Auth] Backend signup alert sent:', data))
+        .catch(err => console.warn('[Auth] Backend signup alert connection failed:', err));
+    } catch (err) {
+      console.warn('[Auth] Failed to call signup notification endpoint:', err);
     }
 
     loginUser(user);

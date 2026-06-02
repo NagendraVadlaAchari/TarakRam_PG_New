@@ -448,7 +448,7 @@ function triggerTenantPaymentGateway(payId){
   });
 }
 
-function recordPayment(payId){
+function recordPayment(payId, tenantId='', month='', amount=0){
   showModal('Record Payment',`
     <div class="form-group"><label class="form-label">Payment Mode</label>
       <select class="form-control" id="rp-mode">
@@ -459,16 +459,38 @@ function recordPayment(payId){
     <div class="form-group"><label class="form-label">Paid On</label><input class="form-control" id="rp-date" type="date" value="${new Date().toISOString().slice(0,10)}" /></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-success" onclick="savePayment('${payId}')"><i class="fas fa-check"></i> Confirm Payment</button>
+      <button class="btn btn-success" onclick="savePayment('${payId}', '${tenantId}', '${month}', ${amount})"><i class="fas fa-check"></i> Confirm Payment</button>
     </div>`,false);
 }
 
-function savePayment(payId){
+function savePayment(payId, tenantId='', month='', amount=0){
   const mode = document.getElementById('rp-mode').value;
   const txn = document.getElementById('rp-txn').value.trim();
   const date = document.getElementById('rp-date').value;
   const payments = DB.get('payments')||[];
-  const p = payments.find(p=>p.id===payId);
+  
+  let p = payments.find(p=>p.id===payId);
+  if(!p && tenantId && month) {
+    // Generate a new payment record because one doesn't exist yet
+    const tenant = (DB.get('tenants')||[]).find(t=>t.id===tenantId);
+    if (tenant) {
+      p = {
+        id: payId || genId('P'),
+        tenantId: tenantId,
+        tenantName: tenant.name,
+        roomId: tenant.roomId,
+        month: month,
+        amount: amount || tenant.rent,
+        status: 'pending',
+        dueDate: `${month}-05`,
+        paidOn: '',
+        paymentMode: '',
+        txnId: ''
+      };
+      payments.push(p);
+    }
+  }
+  
   if(p){
     p.status='paid'; p.paymentMode=mode; p.txnId=txn||genId('TXN'); p.paidOn=date;
     DB.set('payments',payments);
@@ -476,6 +498,8 @@ function savePayment(payId){
     closeModal();
     showToast('Payment recorded!','success');
     navigateTo('finance');
+  } else {
+    showToast('Failed to record payment: record not found', 'error');
   }
 }
 

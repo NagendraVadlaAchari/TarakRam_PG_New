@@ -26,7 +26,12 @@ const WHATSAPP_CONFIG = {
 
   // Number to receive a SILENT backend notification when any user SIGNS UP
   // Change this number to redirect signup notifications
-  signupNotifyNumber: '+91-9492947038'
+  signupNotifyNumber: '+91-9492947038',
+
+  // CallMeBot API key for sending silent WhatsApp messages.
+  // Set up your API key by sending "I allow callmebot to send me messages" via WhatsApp
+  // to CallMeBot's number, then add the apikey below:
+  callmebotApiKey: 'YOUR_API_KEY_HERE'
 };
 
 let dbRoomsLoaded = false;
@@ -354,10 +359,8 @@ async function loadTenantsFromDB() {
     console.log(`[Supabase] ✅ Loaded ${dbTenants.length} tenants from database`);
     
     // Also sync payments for DB tenants so Finance & Dues shows updated list
-    const payments = DB.get('payments') || [];
-    let pid = payments.length ? Math.max(...payments.map(p=>parseInt(p.id.replace('P',''))||0)) + 1 : 1;
+    let payments = DB.get('payments') || [];
     let paymentsModified = false;
-    const currentMonth = new Date().toISOString().slice(0,7);
     dbTenants.forEach(t => {
       const tenantPayments = payments.filter(p => p.tenantId === t.id);
       if (tenantPayments.length > 0) {
@@ -372,6 +375,19 @@ async function loadTenantsFromDB() {
       // NOTE: Pending payment records are created only when admin explicitly records them
       // via addPaymentModal() — NOT auto-generated on tenant load.
     });
+
+    // Cleanup existing stale auto-generated pending payments for tenants who have NO paid payments
+    payments = payments.filter(p => {
+      if (p.status === 'pending') {
+        const hasPaid = payments.some(x => x.tenantId === p.tenantId && x.status === 'paid');
+        if (!hasPaid) {
+          paymentsModified = true;
+          return false;
+        }
+      }
+      return true;
+    });
+
     if (paymentsModified) {
       DB.set('payments', payments);
     }
