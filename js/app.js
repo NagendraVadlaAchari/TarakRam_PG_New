@@ -451,7 +451,7 @@ function renderRCTable(month, tenants, payments){
             <td>${p&&p.paymentMode||'—'}</td>
             <td>
               <div style="display:flex;gap:6px;align-items:center">
-                ${!isPaid ? `<button class="btn btn-success btn-sm" title="Mark Paid" onclick="recordPayment('${p ? p.id : ''}')"><i class="fas fa-check"></i></button>` : '<span style="color:var(--success);font-size:12px">✓ Paid</span>'}
+                ${!isPaid ? `<button class="btn btn-success btn-sm" title="Mark Paid" onclick="recordPayment('${p ? p.id : ''}', '${t.id}', '${month}', ${t.rent})"><i class="fas fa-check"></i></button>` : '<span style="color:var(--success);font-size:12px">✓ Paid</span>'}
                 ${!isPaid ? `<button class="btn btn-secondary btn-sm" title="Send Reminder" onclick="sendIndividualReminder('${t.id}', '${month}')"><i class="fas fa-bell"></i></button>` : ''}
               </div>
             </td>
