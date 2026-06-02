@@ -153,6 +153,7 @@ function showRoomDetail(roomId){
   const footerBtn = user.role === 'admin'
     ? `<div class="modal-footer" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
         <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+        <button class="btn btn-danger" onclick="deleteRoom('${room.id}')" title="Delete Room"><i class="fas fa-trash"></i> Delete Room</button>
         <button class="btn btn-primary" onclick="showEditRoomModal('${room.id}')"><i class="fas fa-edit"></i> Edit Room</button>
        </div>`
     : `<div class="modal-footer" style="margin-top:16px;display:flex;justify-content:flex-end">
@@ -284,6 +285,38 @@ async function addRoom(){
   } catch (err) {
     console.error('Save room error:', err);
     showToast(`Failed to save room in DB: ${err.message}`, 'error');
+  }
+}
+
+async function deleteRoom(roomId) {
+  const rooms = DB.get('rooms') || [];
+  const room = rooms.find(r => r.id === roomId);
+  if (!room) return;
+  
+  // Check if room has occupants
+  const occupancy = getRoomOccupancy();
+  const r = occupancy.find(x => x.id === roomId);
+  if (r && r.occupied > 0) {
+    showToast(`Cannot delete Room ${room.number} — it has ${r.occupied} occupant(s). Vacate all tenants first.`, 'error');
+    return;
+  }
+  
+  if (!confirm(`Are you sure you want to permanently delete Room ${room.number}? This cannot be undone.`)) return;
+  
+  closeModal();
+  showToast('Deleting room from database...', 'info');
+  
+  try {
+    if (room.db_id) {
+      await deleteRoomFromDB(room.db_id);
+    }
+    const updatedRooms = rooms.filter(r => r.id !== roomId);
+    DB.set('rooms', updatedRooms);
+    showToast(`Room ${room.number} deleted successfully!`, 'success');
+    navigateTo('rooms');
+  } catch (err) {
+    console.error('Delete room error:', err);
+    showToast(`Failed to delete room: ${err.message}`, 'error');
   }
 }
 

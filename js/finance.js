@@ -818,7 +818,7 @@ function renderExpensesSection(){
             <th>Amount</th>
             <th>Method</th>
             <th>Paid By</th>
-            <th>Actions</th>
+            <th style="min-width:120px">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -833,9 +833,14 @@ function renderExpensesSection(){
             <td><span style="font-size:12px;color:var(--text2)"><i class="fas fa-${e.paymentMethod==='UPI'?'mobile-alt':e.paymentMethod==='Cash'?'money-bill-wave':'credit-card'}"></i> ${e.paymentMethod}</span></td>
             <td><span class="badge badge-purple">${e.paidBy}</span></td>
             <td>
-              <button class="btn btn-primary btn-sm" onclick="showEditExpenseModal('${e.id}')">
-                <i class="fas fa-edit"></i> Edit
-              </button>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-primary btn-sm" onclick="showEditExpenseModal('${e.id}')" title="Edit">
+                  <i class="fas fa-edit"></i> Edit
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="deleteExpense('${e.id}')" title="Delete">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
             </td>
           </tr>`).join('')}
         </tbody>
@@ -1019,5 +1024,28 @@ async function updateExpense(id){
   } catch(err) {
      console.error('Update expense error:', err);
      showToast(`Failed to update expense in DB: ${err.message}`, 'error');
+  }
+}
+
+async function deleteExpense(id) {
+  if (!confirm('Are you sure you want to permanently delete this expense? This cannot be undone.')) return;
+  
+  showToast('Deleting expense from database...', 'info');
+  
+  try {
+    await deleteExpenseFromDB(id);
+    // Also remove from local dbExpenses array
+    if (dbExpenses) {
+      const idx = dbExpenses.findIndex(e => String(e.id) === String(id));
+      if (idx !== -1) dbExpenses.splice(idx, 1);
+    }
+    const localExpenses = DB.get('expenses') || [];
+    DB.set('expenses', localExpenses.filter(e => String(e.id) !== String(id)));
+    closeModal();
+    showToast('Expense deleted successfully!', 'success');
+    navigateTo('finance');
+  } catch (err) {
+    console.error('Delete expense error:', err);
+    showToast(`Failed to delete expense: ${err.message}`, 'error');
   }
 }

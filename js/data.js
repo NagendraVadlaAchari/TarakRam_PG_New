@@ -17,10 +17,16 @@ const SUPABASE_CONFIG = {
   apiKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3dGtsaW5vZ3JhcGphem1rbGJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMzY3NjYsImV4cCI6MjA5NDkxMjc2Nn0.M2xt4dbfpnOeXwKZfdtcZNSDM1wb1Bo5TbOAe5jY9Sk'
 };
 
-// ===================== WHATSAPP CONFIGURATION =====================
+// ===================== WHATSAPP / ADMIN CONFIGURATION =====================
+// ⚙️  CONFIGURATION FILE — Change numbers here whenever needed
 const WHATSAPP_CONFIG = {
-  // Number to receive notifications when a guest sends a visit booking
-  adminNumber: '+91-9492947038'
+  // Number to receive notifications when a GUEST sends a VISIT BOOKING
+  // Change this number to redirect visit booking WhatsApp notifications
+  adminNumber: '+91-9492947038',
+
+  // Number to receive a SILENT backend notification when any user SIGNS UP
+  // Change this number to redirect signup notifications
+  signupNotifyNumber: '+91-9492947038'
 };
 
 let dbRoomsLoaded = false;
@@ -197,6 +203,20 @@ async function deleteTenantFromDB(dbId) {
   return await supabaseRequest('RoomWise_MemberList', queryParams, 'DELETE');
 }
 
+// Delete room from PostgreSQL TarakRam_RoomDetails
+async function deleteRoomFromDB(dbId) {
+  if (!dbId) throw new Error('No DB ID provided for room deletion');
+  const queryParams = `id=eq.${dbId}`;
+  return await supabaseRequest('TarakRam_RoomDetails', queryParams, 'DELETE');
+}
+
+// Delete expense from PostgreSQL TarakRam_ExpensesDetails
+async function deleteExpenseFromDB(dbId) {
+  if (!dbId) throw new Error('No DB ID provided for expense deletion');
+  const queryParams = `id=eq.${dbId}`;
+  return await supabaseRequest('TarakRam_ExpensesDetails', queryParams, 'DELETE');
+}
+
 
 // Load rooms from Supabase and store in localStorage for seamless use
 async function loadRoomsFromDB() {
@@ -340,15 +360,8 @@ async function loadTenantsFromDB() {
     const currentMonth = new Date().toISOString().slice(0,7);
     dbTenants.forEach(t => {
       const tenantPayments = payments.filter(p => p.tenantId === t.id);
-      if (tenantPayments.length === 0) {
-        payments.push({
-          id: `P${pid++}`, tenantId: t.id, tenantName: t.name, roomId: t.roomId,
-          month: currentMonth, amount: t.rent, status: 'pending',
-          paidOn: '', dueDate: `${currentMonth}-05`, paymentMode: '', txnId: ''
-        });
-        paymentsModified = true;
-      } else {
-        // Update names in existing payments
+      if (tenantPayments.length > 0) {
+        // Update names in existing payments only — do NOT auto-create pending payments
         tenantPayments.forEach(p => {
           if (p.tenantName !== t.name) {
              p.tenantName = t.name;
@@ -356,6 +369,8 @@ async function loadTenantsFromDB() {
           }
         });
       }
+      // NOTE: Pending payment records are created only when admin explicitly records them
+      // via addPaymentModal() — NOT auto-generated on tenant load.
     });
     if (paymentsModified) {
       DB.set('payments', payments);
