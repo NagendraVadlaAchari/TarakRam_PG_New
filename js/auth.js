@@ -243,6 +243,43 @@ function renderLoginPage(){
           <div style="display:flex;gap:8px;"><i class="fas fa-phone" style="color:var(--primary-light);margin-top:2px;font-size:11px;"></i> <span><strong>87900 27362, 97415 31077</strong> (U. Navya)</span></div>
         </div>
       </div>
+
+      <!-- Location & Map Card -->
+      <div class="map-card" style="background:var(--card);border:1px solid var(--border);border-radius:24px;padding:24px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:16px;justify-content:space-between;">
+        <div>
+          <!-- Map Card Header -->
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--accent);font-weight:700;margin-bottom:8px;">
+            <i class="fas fa-map-marked-alt"></i> Location &amp; Directions
+          </div>
+          <h3 style="font-family:'Poppins',sans-serif;font-size:18px;font-weight:800;color:#fff;margin-bottom:12px;">Tarak Ram Luxury Women's PG</h3>
+          
+          <!-- Interactive Map Container -->
+          <div style="width:100%;height:220px;border-radius:16px;overflow:hidden;border:1px solid var(--border);margin-bottom:12px;background:var(--bg3);box-shadow:inset 0 0 10px rgba(0,0,0,0.5)">
+            <iframe 
+              src="https://maps.google.com/maps?q=Tarak%20Ram%20Luxury%20Women's%20PG%20Hyderabad&t=&z=15&ie=UTF8&iwloc=&output=embed" 
+              width="100%" 
+              height="100%" 
+              style="border:0;" 
+              allowfullscreen="" 
+              loading="lazy" 
+              referrerpolicy="no-referrer-when-downgrade">
+            </iframe>
+          </div>
+          
+          <p style="font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:10px;">
+            We are conveniently located in Keshava Nagar Colony, Gowlidoddli, Hyderabad. Safe surroundings with easy access to main IT hubs, financial district and transport links.
+          </p>
+        </div>
+        
+        <div style="display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--border);padding-top:14px;">
+          <a class="btn btn-primary" style="width:100%;justify-content:center;font-weight:700;font-size:13.5px;" href="https://www.google.com/maps/place/Tarak+Ram+Luxury+Women's+PG/@17.4325089,78.3269969,17z/data=!3m1!4b1!4m6!3m5!1s0x3bcb93b939328735:0xa4a1b402a66ebed9!8m2!3d17.4325089!4d78.3269969!16s%2Fg%2F11nk0xq0vy?entry=ttu&g_ep=EgoyMDI2MDUzMS4wIKXMDSoASAFQAw%3D%3D" target="_blank">
+            <i class="fas fa-directions"></i> Get Directions on Google Maps
+          </a>
+          <span style="font-size:11px;color:var(--text3);text-align:center;">
+            <i class="fas fa-location-arrow"></i> Click to navigate using Google Maps
+          </span>
+        </div>
+      </div>
     </div>
   </div>`;
 }

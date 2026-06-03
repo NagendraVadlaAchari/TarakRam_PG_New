@@ -172,7 +172,7 @@ async function updateRoomInDB(dbId, originalRoomNo, newRoomNo, floor, capacity, 
 }
 
 // Save new tenant in PostgreSQL RoomWise_MemberList
-async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roomNo, floorNo) {
+async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit) {
   const nextId = await getNextTenantId();
   const body = {
     id: nextId,
@@ -181,13 +181,16 @@ async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roo
     Occupation: String(occupation),
     DOJ: joinDate ? joinDate : null,
     Room_No: String(roomNo),
-    Floor_No: String(floorNo)
+    Floor_No: String(floorNo),
+    Email: email || null,
+    DOB: dob || null,
+    SecurityDeposit: deposit !== undefined && deposit !== null ? String(deposit) : null
   };
   return await supabaseRequest('RoomWise_MemberList', '', 'POST', body);
 }
 
 // Update existing tenant in PostgreSQL RoomWise_MemberList
-async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate, roomNo, floorNo) {
+async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit) {
   if (!dbId) throw new Error('No DB ID provided for tenant update');
   const queryParams = `id=eq.${dbId}`;
   const body = {
@@ -196,7 +199,10 @@ async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate
     Occupation: String(occupation),
     DOJ: joinDate ? joinDate : null,
     Room_No: String(roomNo),
-    Floor_No: String(floorNo)
+    Floor_No: String(floorNo),
+    Email: email || null,
+    DOB: dob || null,
+    SecurityDeposit: deposit !== undefined && deposit !== null ? String(deposit) : null
   };
   return await supabaseRequest('RoomWise_MemberList', queryParams, 'PATCH', body);
 }
@@ -331,14 +337,15 @@ async function fetchDBTenants() {
       id: `T${row.id}`,
       name: row.Tenant_Name,
       mobile: row.Mobile_No || '9999999999',
-      email: 'tenant@example.com',
+      email: row.Email || '',
+      dob: row.DOB || '',
       occupation: row.Occupation || 'Member',
       company: 'SLV PG',
       roomId: `R${row.Room_No}`,
       bedNo: 1,
-      joinDate: row.created_at,
+      joinDate: row.DOJ || row.created_at,
       rent: 6000,
-      deposit: 12000,
+      deposit: row.SecurityDeposit ? parseFloat(row.SecurityDeposit) : 0,
       status: 'active',
       db_id: row.id
     }));

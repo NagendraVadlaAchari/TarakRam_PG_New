@@ -274,27 +274,30 @@ tr:hover td{background:rgba(124,58,237,.06);}
   margin-bottom: 0;
 }
 
-/* Dual Column Auth Page Layout */
+/* Triple Column Auth Page Layout with Map Details */
 .auth-container {
   display: grid;
   grid-template-columns: 1fr;
   gap: 30px;
-  max-width: 1000px;
+  max-width: 460px;
   width: 100%;
   padding: 20px;
+  margin: 0 auto;
   align-items: stretch;
 }
-@media (min-width: 769px) {
+@media (min-width: 769px) and (max-width: 1100px) {
   .auth-container {
     grid-template-columns: 1fr 1.15fr;
+    max-width: 900px;
+  }
+  .map-card {
+    grid-column: span 2;
   }
 }
-@media (max-width: 768px) {
+@media (min-width: 1101px) {
   .auth-container {
-    max-width: 460px;
-  }
-  .facilities-card {
-    max-width: 100% !important;
+    grid-template-columns: 1fr 1.1fr 1.1fr;
+    max-width: 1350px;
   }
 }
 

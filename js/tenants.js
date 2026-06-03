@@ -91,12 +91,12 @@ function showTenantDetail(id){
       ${detail('Email',t.email,'envelope')}
       ${detail('Occupation',t.occupation,'briefcase')}
       ${detail('Company',t.company,'building')}
-      ${detail('DOB',formatDate(t.dob),'birthday-cake')}
-      ${detail('Join Date',formatDate(t.joinDate),'calendar-plus')}
-      ${detail('Rent',`₹${t.rent.toLocaleString()}/month`,'rupee-sign')}
-      ${detail('Deposit',`₹${t.deposit.toLocaleString()}`,'shield-alt')}
-      ${detail('Notice Period',`${t.noticePeriod} days`,'clock')}
-      ${detail('ID Proof',`${t.idProof} - ${t.idNumber}`,'id-card')}
+      ${detail('DOB',t.dob ? formatDate(t.dob) : '','birthday-cake')}
+      ${detail('Join Date',t.joinDate ? formatDate(t.joinDate) : '','calendar-plus')}
+      ${detail('Rent',t.rent ? `₹${t.rent.toLocaleString()}/month` : '','rupee-sign')}
+      ${detail('Deposit',t.deposit ? `₹${t.deposit.toLocaleString()}` : '','shield-alt')}
+      ${detail('Notice Period',t.noticePeriod ? `${t.noticePeriod} days` : '','clock')}
+      ${detail('ID Proof',(t.idProof && t.idNumber) ? `${t.idProof} - ${t.idNumber}` : (t.idProof || t.idNumber),'id-card')}
       ${detail('Emergency',t.emergencyContact,'phone-alt')}
     </div>
     ${pending.length?`<div style="padding:12px;background:rgba(239,68,68,.1);border-radius:10px;border:1px solid rgba(239,68,68,.2);margin-bottom:12px"><p style="font-size:13px;font-weight:600;color:var(--danger);margin-bottom:6px"><i class="fas fa-exclamation-circle"></i> Pending Dues</p>${pending.map(p=>`<p style="font-size:12px;color:var(--text2)">${p.month} — ₹${p.amount.toLocaleString()}</p>`).join('')}</div>`:''}
@@ -106,7 +106,10 @@ function showTenantDetail(id){
 }
 
 function detail(label, val, icon){
-  return `<div style="padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:11px;color:var(--text3);margin-bottom:3px"><i class="fas fa-${icon}"></i> ${label}</div><div style="font-weight:500;color:var(--text)">${val||'—'}</div></div>`;
+  if (val === undefined || val === null || String(val).trim() === '' || String(val).trim() === '—' || String(val).trim() === 'NaN' || String(val).trim() === 'Invalid Date') {
+    return '';
+  }
+  return `<div style="padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:11px;color:var(--text3);margin-bottom:3px"><i class="fas fa-${icon}"></i> ${label}</div><div style="font-weight:500;color:var(--text)">${val}</div></div>`;
 }
 
 function renderMyProfile(){
@@ -257,8 +260,16 @@ function saveTenant(){
   const selRoom = allRooms.find(r=>r.id===roomId);
   const floorNo = selRoom ? selRoom.floor : 1;
   const roomNo = roomId.replace('R','');
-  saveNewTenantToDB(name, mobile, occ||'Member', joinDate, roomNo, String(floorNo))
-    .then(()=>{ console.log('[DB] ✅ Tenant saved to RoomWise_MemberList'); })
+  saveNewTenantToDB(name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit)
+    .then(()=>{
+      console.log('[DB] ✅ Tenant saved to RoomWise_MemberList');
+      return loadTenantsFromDB();
+    })
+    .then(() => {
+      if (currentPage === 'tenants') {
+        navigateTo('tenants');
+      }
+    })
     .catch(err=>{ console.error('[DB] ❌ Failed to save tenant to DB:', err.message); showToast('Tenant saved locally, DB sync failed: '+err.message,'warning'); });
 
   addNotification({to:'admin',type:'join',title:'New Tenant Added',message:`${name} has been added to Room ${roomId.replace('R','')} Bed ${bedNo}.`});
@@ -374,8 +385,16 @@ function saveEditedTenant(id){
   const allRooms = getRoomOccupancy();
   const selRoom = allRooms.find(r=>r.id===t.roomId);
   const floorNo = selRoom ? selRoom.floor : '';
-  updateTenantInDB(t.db_id, name, mobile, occ||'Member', joinDate, roomNo, String(floorNo))
-    .then(()=>{ console.log('[DB] ✅ Tenant updated in RoomWise_MemberList'); })
+  updateTenantInDB(t.db_id, name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit)
+    .then(()=>{
+      console.log('[DB] ✅ Tenant updated in RoomWise_MemberList');
+      return loadTenantsFromDB();
+    })
+    .then(() => {
+      if (currentPage === 'tenants') {
+        navigateTo('tenants');
+      }
+    })
     .catch(err=>{ console.error('[DB] ❌ Failed to update tenant in DB:', err.message); showToast('Saved locally, DB sync failed: '+err.message,'warning'); });
 
   closeModal();

@@ -403,24 +403,12 @@ function renderBookingPage(){
       </div>
     </div>
     
-    <!-- Room & Bed Selection -->
     <div>
-      <div class="card" style="margin-bottom: 16px">
+      <!-- Room & Bed Choice (Hidden for Guest Onboarding) -->
+      <div class="card" style="display: none;">
         <div class="card-title"><i class="fas fa-bed"></i> 2. Room & Bed Choice</div>
-        
-        <div class="form-group">
-          <label class="form-label">Select Room</label>
-          <select class="form-control" id="bk-room-select" onchange="onBookingRoomChange()">
-            ${vacantRooms.map(r => `<option value="${r.id}" ${r.id === selRoomId ? 'selected' : ''}>Room ${r.number} (${r.type} · Rent ₹${r.rent.toLocaleString()}/bed) — ${r.beds - r.occupied} vacant</option>`).join('')}
-          </select>
-        </div>
-        
-        <div class="form-group">
-          <label class="form-label">Select Vacant Bed</label>
-          <select class="form-control" id="bk-bed-select">
-            ${beds.map(b => `<option value="${b}" ${b == selBedNo ? 'selected' : ''}>Bed No. ${b}</option>`).join('')}
-          </select>
-        </div>
+        <input type="hidden" id="bk-room-select" value="${selRoomId}" />
+        <input type="hidden" id="bk-bed-select" value="${selBedNo || (beds[0] || '1')}" />
       </div>
       
       <!-- Financial Summary & Checkout -->
