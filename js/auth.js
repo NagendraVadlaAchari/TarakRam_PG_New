@@ -524,6 +524,22 @@ async function handleSignup(){
       dbRecord: record
     };
 
+    // Create in-app notification for admin
+    try {
+      if(typeof addNotification === 'function') {
+        addNotification({
+          to: 'admin',
+          type: 'join',
+          title: 'New User Registered',
+          message: `A new user has registered: ${name} (Mobile: ${mobile})`
+        });
+      } else {
+        console.warn('[Auth] addNotification function is not available.');
+      }
+    } catch(err) {
+      console.warn('[Auth] Failed to add in-app signup notification:', err);
+    }
+
     // Call the admin backend API to register signup notification (silent, no browser popups)
     try {
       const adminNum = (typeof WHATSAPP_CONFIG !== 'undefined' && WHATSAPP_CONFIG.signupNotifyNumber) ? WHATSAPP_CONFIG.signupNotifyNumber : '';
