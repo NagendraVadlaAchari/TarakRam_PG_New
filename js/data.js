@@ -352,7 +352,7 @@ async function fetchDBTenants() {
         email: row.Email || '',
         dob: row.DOB || '',
         occupation: row.Occupation || 'Member',
-        company: 'SLV PG',
+        company: row.Company || '',
         roomId: tenantRoomId,
         bedNo: 1,
         joinDate: row.DOJ || row.created_at,

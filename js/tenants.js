@@ -128,7 +128,7 @@ function renderMyProfile(){
       <div style="text-align:center;padding:16px 0">
         <div style="width:80px;height:80px;background:linear-gradient(135deg,var(--primary),var(--secondary));border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;color:#fff;margin:0 auto 16px">${t.name[0]}</div>
         <h2 style="font-size:20px;margin-bottom:4px">${t.name}</h2>
-        <p style="font-size:13px;color:var(--text3)">${t.occupation} · ${t.company}</p>
+        <p style="font-size:13px;color:var(--text3)">${t.occupation}${t.company ? ' · ' + t.company : ''}</p>
         <div style="margin-top:12px;display:flex;gap:8px;justify-content:center">
           <span class="badge badge-purple">ID: ${t.id}</span>
           <span class="badge badge-success">Active</span>
