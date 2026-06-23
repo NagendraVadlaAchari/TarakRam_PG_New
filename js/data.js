@@ -331,24 +331,37 @@ async function updateExpenseInDB(dbId, expense) {
 async function fetchDBTenants() {
   try {
     const memberRows = await supabaseRequest('RoomWise_MemberList', 'select=*&order=id.asc');
+    const rooms = DB.get('rooms') || [];
 
     // Map DB columns to the format the frontend expects
-    const tenants = memberRows.map(row => ({
-      id: `T${row.id}`,
-      name: row.Tenant_Name,
-      mobile: row.Mobile_No || '9999999999',
-      email: row.Email || '',
-      dob: row.DOB || '',
-      occupation: row.Occupation || 'Member',
-      company: 'SLV PG',
-      roomId: `R${row.Room_No}`,
-      bedNo: 1,
-      joinDate: row.DOJ || row.created_at,
-      rent: 6000,
-      deposit: row.SecurityDeposit ? parseFloat(row.SecurityDeposit) : 0,
-      status: 'active',
-      db_id: row.id
-    }));
+    const tenants = memberRows.map(row => {
+      const tenantRoomId = `R${row.Room_No}`;
+      const matchingRoom = rooms.find(r => r.id === tenantRoomId);
+      
+      // Determine AC/Non-AC type based on room number suffix for fallback rent
+      const rNumStr = String(row.Room_No);
+      const isAC = rNumStr.endsWith('01') || rNumStr.endsWith('02') || rNumStr.endsWith('.01') || rNumStr.endsWith('.02');
+      const fallbackRent = isAC ? 8000 : 6000;
+      
+      const rent = matchingRoom ? matchingRoom.rent : fallbackRent;
+
+      return {
+        id: `T${row.id}`,
+        name: row.Tenant_Name,
+        mobile: row.Mobile_No || '9999999999',
+        email: row.Email || '',
+        dob: row.DOB || '',
+        occupation: row.Occupation || 'Member',
+        company: 'SLV PG',
+        roomId: tenantRoomId,
+        bedNo: 1,
+        joinDate: row.DOJ || row.created_at,
+        rent: rent,
+        deposit: row.SecurityDeposit ? parseFloat(row.SecurityDeposit) : 0,
+        status: 'active',
+        db_id: row.id
+      };
+    });
 
     console.log(`[Supabase] ✅ Fetched ${tenants.length} tenants from RoomWise_MemberList`);
     return tenants;

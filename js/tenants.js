@@ -192,7 +192,7 @@ function showAddTenantModal(){
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Join Date *</label><input class="form-control" id="at-join" type="date" value="${new Date().toISOString().slice(0,10)}" /></div>
-      <div class="form-group"><label class="form-label">Monthly Rent (₹) *</label><input class="form-control" id="at-rent" type="number" placeholder="8000" /></div>
+      <div class="form-group"><label class="form-label">Monthly Rent (₹) [Room Rate] *</label><input class="form-control" id="at-rent" type="number" placeholder="Select room first" readonly style="background:var(--bg3);cursor:not-allowed;" title="Rent is auto-populated from Room details" /></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Security Deposit (₹)</label><input class="form-control" id="at-dep" type="number" placeholder="16000" /></div>
@@ -332,7 +332,7 @@ function editTenant(id){
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Join Date</label><input class="form-control" id="et-join" type="date" value="${t.joinDate||''}" /></div>
-        <div class="form-group"><label class="form-label">Monthly Rent (₹)</label><input class="form-control" id="et-rent" type="number" value="${t.rent||''}" /></div>
+        <div class="form-group"><label class="form-label">Monthly Rent (₹) [Room Rate]</label><input class="form-control" id="et-rent" type="number" value="${t.rent||''}" readonly style="background:var(--bg3);cursor:not-allowed;" title="Rent is managed under Rooms & Occupancy data" /></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Security Deposit (₹)</label><input class="form-control" id="et-dep" type="number" value="${t.deposit||''}" /></div>

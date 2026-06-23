@@ -33,14 +33,20 @@ app.get('/api/rooms', async (req, res) => {
       // Find members for this room
       const roomMembers = members.filter(m => m.Room_No === row.Room_No);
       
+      const rNumStr = String(row.Room_No);
+      const isAC = rNumStr.endsWith('01') || rNumStr.endsWith('02') || rNumStr.endsWith('.01') || rNumStr.endsWith('.02');
+      const type = isAC ? 'AC' : 'Non-AC';
+      const rentFromDB = row.Room_Rent ? parseFloat(row.Room_Rent) : null;
+      const rent = rentFromDB || (isAC ? 8000 : 6000);
+      
       return {
         id: `R${row.Room_No}`,
-        number: String(row.Room_No),
+        number: rNumStr,
         floor: parseInt(row.Floor_No) || 1,     // Now use Floor_No from DB
         beds: parseInt(row.Room_Capacity) || 4, // Room_Capacity from DB
         occupied: roomMembers.length,           // Occupied beds based on members
-        type: 'Standard',                       // Default type
-        rent: 6000,                             // Default rent
+        type: type,
+        rent: rent,
         created_at: row.created_at,
         db_id: row.id,                          // Preserve original DB id
         members: roomMembers                    // Include members for UI
@@ -63,23 +69,38 @@ app.get('/api/tenants', async (req, res) => {
   try {
     await client.connect();
     const result = await client.query('SELECT * FROM "RoomWise_MemberList" ORDER BY id ASC');
+    const roomsRes = await client.query('SELECT * FROM "TarakRam_RoomDetails"');
+    const roomsRows = roomsRes.rows;
     
     // Map DB columns to the format the frontend expects
-    const tenants = result.rows.map(row => ({
-      id: `T${row.id}`,
-      name: row.Tenant_Name,
-      mobile: '9999999999', // Default
-      email: 'tenant@example.com',
-      occupation: 'Member',
-      company: 'SLV PG',
-      roomId: `R${row.Room_No}`,
-      bedNo: 1, // Default
-      joinDate: row.created_at,
-      rent: 6000,
-      deposit: 12000,
-      status: 'active',
-      db_id: row.id
-    }));
+    const tenants = result.rows.map(row => {
+      const roomRow = roomsRows.find(r => r.Room_No === row.Room_No);
+      
+      let rent = 6000;
+      if (roomRow && roomRow.Room_Rent) {
+        rent = parseFloat(roomRow.Room_Rent);
+      } else {
+        const rNumStr = String(row.Room_No);
+        const isAC = rNumStr.endsWith('01') || rNumStr.endsWith('02') || rNumStr.endsWith('.01') || rNumStr.endsWith('.02');
+        rent = isAC ? 8000 : 6000;
+      }
+
+      return {
+        id: `T${row.id}`,
+        name: row.Tenant_Name,
+        mobile: row.Mobile_No || '9999999999',
+        email: row.Email || 'tenant@example.com',
+        occupation: row.Occupation || 'Member',
+        company: 'SLV PG',
+        roomId: `R${row.Room_No}`,
+        bedNo: 1, // Default
+        joinDate: row.DOJ || row.created_at,
+        rent: rent,
+        deposit: row.SecurityDeposit ? parseFloat(row.SecurityDeposit) : rent * 2,
+        status: 'active',
+        db_id: row.id
+      };
+    });
 
     console.log(`[API] Fetched ${tenants.length} tenants from RoomWise_MemberList`);
     res.json({ success: true, tenants, count: tenants.length });
