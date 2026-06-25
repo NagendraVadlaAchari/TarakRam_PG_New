@@ -172,7 +172,7 @@ async function updateRoomInDB(dbId, originalRoomNo, newRoomNo, floor, capacity, 
 }
 
 // Save new tenant in PostgreSQL RoomWise_MemberList
-async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit) {
+async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege) {
   const nextId = await getNextTenantId();
   const body = {
     id: nextId,
@@ -184,13 +184,14 @@ async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roo
     Floor_No: String(floorNo),
     Email: email || null,
     DOB: dob || null,
-    SecurityDeposit: deposit !== undefined && deposit !== null ? String(deposit) : null
+    SecurityDeposit: deposit !== undefined && deposit !== null ? String(deposit) : null,
+    CompanyCollegeName: companyCollege || null
   };
   return await supabaseRequest('RoomWise_MemberList', '', 'POST', body);
 }
 
 // Update existing tenant in PostgreSQL RoomWise_MemberList
-async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit) {
+async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege) {
   if (!dbId) throw new Error('No DB ID provided for tenant update');
   const queryParams = `id=eq.${dbId}`;
   const body = {
@@ -202,9 +203,80 @@ async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate
     Floor_No: String(floorNo),
     Email: email || null,
     DOB: dob || null,
-    SecurityDeposit: deposit !== undefined && deposit !== null ? String(deposit) : null
+    SecurityDeposit: deposit !== undefined && deposit !== null ? String(deposit) : null,
+    CompanyCollegeName: companyCollege || null
   };
   return await supabaseRequest('RoomWise_MemberList', queryParams, 'PATCH', body);
+}
+
+// Save vacated tenant details to RoomWise_MemberList_VacateDetails
+async function saveVacateDetailsToDB(tenant, vacateDate) {
+  const body = {
+    Tenant_Name: tenant.name || null,
+    Mobile_No: tenant.mobile || null,
+    Email: tenant.email || null,
+    DOB: tenant.dob || null,
+    Occupation: tenant.occupation || null,
+    CompanyCollegeName: tenant.company || null,
+    Room_No: tenant.roomId ? tenant.roomId.replace('R', '') : null,
+    DOJ: tenant.joinDate || null,
+    VacateDate: vacateDate || new Date().toISOString().slice(0, 10),
+    SecurityDeposit: tenant.deposit !== undefined && tenant.deposit !== null ? String(tenant.deposit) : null,
+    Rent: tenant.rent !== undefined && tenant.rent !== null ? String(tenant.rent) : null,
+    IDProof: tenant.idProof || null,
+    IDNumber: tenant.idNumber || null,
+    EmergencyContact: tenant.emergencyContact || null
+  };
+  return await supabaseRequest('RoomWise_MemberList_VacateDetails', '', 'POST', body);
+}
+
+// Load all vacate details from RoomWise_MemberList_VacateDetails
+async function loadVacateDetailsFromDB() {
+  try {
+    console.log('[Supabase] Fetching vacate details from RoomWise_MemberList_VacateDetails...');
+    const rows = await supabaseRequest('RoomWise_MemberList_VacateDetails', 'select=*&order=id.desc');
+    console.log(`[Supabase] ✅ Loaded ${rows.length} vacate records`);
+    return rows;
+  } catch (err) {
+    console.error('[Supabase] ❌ Vacate details loading failed:', err.message);
+    throw err;
+  }
+}
+
+// Export vacate details as CSV download
+async function exportVacateDetailsCSV() {
+  try {
+    showToast('Fetching vacate details...', 'info');
+    const rows = await loadVacateDetailsFromDB();
+    if (!rows || rows.length === 0) {
+      showToast('No vacate records found.', 'warning');
+      return;
+    }
+    const headers = ['ID','Tenant Name','Mobile','Email','DOB','Occupation','Company/College','Room No','Join Date','Vacate Date','Security Deposit','Rent','ID Proof','ID Number','Emergency Contact','Created At'];
+    const csvRows = rows.map(r => [
+      r.id || '',
+      r.Tenant_Name || '',
+      r.Mobile_No || '',
+      r.Email || '',
+      r.DOB || '',
+      r.Occupation || '',
+      r.CompanyCollegeName || '',
+      r.Room_No || '',
+      r.DOJ || '',
+      r.VacateDate || '',
+      r.SecurityDeposit || '',
+      r.Rent || '',
+      r.IDProof || '',
+      r.IDNumber || '',
+      r.EmergencyContact || '',
+      r.created_at || ''
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+    const csv = [headers.join(','), ...csvRows].join('\n');
+    downloadCSV(csv, 'vacate_details_' + new Date().toISOString().slice(0,10) + '.csv');
+    showToast(`Exported ${rows.length} vacate record(s)!`, 'success');
+  } catch (err) {
+    showToast('Failed to export vacate details: ' + err.message, 'error');
+  }
 }
 
 // Delete tenant from PostgreSQL RoomWise_MemberList
@@ -352,7 +424,7 @@ async function fetchDBTenants() {
         email: row.Email || '',
         dob: row.DOB || '',
         occupation: row.Occupation || 'Member',
-        company: row.Company || '',
+        company: row.CompanyCollegeName || row.Company || '',
         roomId: tenantRoomId,
         bedNo: 1,
         joinDate: row.DOJ || row.created_at,

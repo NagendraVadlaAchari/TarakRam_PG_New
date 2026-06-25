@@ -15,6 +15,7 @@ function renderTenantsPage(){
     <div class="search-bar" style="flex:1;min-width:200px"><i class="fas fa-search"></i><input class="form-control" id="tenant-search" placeholder="Search tenants..." oninput="filterTenants()" /></div>
     ${user.role==='admin'?`<button class="btn btn-primary" onclick="showAddTenantModal()"><i class="fas fa-user-plus"></i> Add Tenant</button>`:''}
     <button class="btn btn-secondary" onclick="exportTenants()"><i class="fas fa-download"></i> Export</button>
+    ${user.role==='admin'?`<button class="btn" style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;" onclick="exportVacateDetailsCSV()"><i class="fas fa-file-export"></i> Export Vacate Details</button>`:''}
   </div>
   <div class="section-tabs">
     <button class="section-tab active" onclick="switchTenantTab('active',this)">Active (${active.length})</button>
@@ -260,7 +261,7 @@ function saveTenant(){
   const selRoom = allRooms.find(r=>r.id===roomId);
   const floorNo = selRoom ? selRoom.floor : 1;
   const roomNo = roomId.replace('R','');
-  saveNewTenantToDB(name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit)
+  saveNewTenantToDB(name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit, comp)
     .then(()=>{
       console.log('[DB] ✅ Tenant saved to RoomWise_MemberList');
       return loadTenantsFromDB();
@@ -283,29 +284,36 @@ function vacateTenant(id){
   const tenants=DB.get('tenants')||[];
   const t=tenants.find(t=>t.id===id);
   if(t){
+    const vacateDate = new Date().toISOString().slice(0,10);
     t.status='vacated';
-    t.vacatedOn=new Date().toISOString().slice(0,10);
+    t.vacatedOn=vacateDate;
     closeModal();
-    
+
     if(t.db_id){
-      showToast('Deleting tenant from database...', 'info');
-      deleteTenantFromDB(t.db_id)
+      showToast('Processing vacate...', 'info');
+      // Step 1: Save vacate record to RoomWise_MemberList_VacateDetails
+      saveVacateDetailsToDB(t, vacateDate)
+        .then(()=>{
+          console.log('[DB] ✅ Vacate details saved to RoomWise_MemberList_VacateDetails');
+          // Step 2: Delete from active member list
+          return deleteTenantFromDB(t.db_id);
+        })
         .then(()=>{
           console.log('[DB] ✅ Tenant deleted from RoomWise_MemberList');
           const updatedTenants = (DB.get('tenants')||[]).filter(item => item.id !== id);
           DB.set('tenants', updatedTenants);
-          showToast('Tenant checked out and deleted from database!','warning');
+          showToast('Tenant vacated! Record saved to vacate history.','success');
           navigateTo('tenants');
         })
         .catch(err=>{
-          console.error('[DB] ❌ Failed to delete tenant from DB:', err.message);
-          showToast('Saved locally, database delete failed: '+err.message,'warning');
+          console.error('[DB] ❌ Vacate process failed:', err.message);
+          showToast('Vacate process failed: '+err.message,'error');
           DB.set('tenants',tenants);
           navigateTo('tenants');
         });
     } else {
       DB.set('tenants',tenants);
-      showToast('Tenant vacated locally','warning');
+      showToast('Tenant vacated locally (no DB record found)','warning');
       navigateTo('tenants');
     }
   }
@@ -385,7 +393,7 @@ function saveEditedTenant(id){
   const allRooms = getRoomOccupancy();
   const selRoom = allRooms.find(r=>r.id===t.roomId);
   const floorNo = selRoom ? selRoom.floor : '';
-  updateTenantInDB(t.db_id, name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit)
+  updateTenantInDB(t.db_id, name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit, comp)
     .then(()=>{
       console.log('[DB] ✅ Tenant updated in RoomWise_MemberList');
       return loadTenantsFromDB();
