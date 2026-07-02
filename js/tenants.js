@@ -193,7 +193,7 @@ function showAddTenantModal(){
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Join Date *</label><input class="form-control" id="at-join" type="date" value="${new Date().toISOString().slice(0,10)}" /></div>
-      <div class="form-group"><label class="form-label">Monthly Rent (₹) [Room Rate] *</label><input class="form-control" id="at-rent" type="number" placeholder="Select room first" readonly style="background:var(--bg3);cursor:not-allowed;" title="Rent is auto-populated from Room details" /></div>
+      <div class="form-group"><label class="form-label">Monthly Rent (₹) [Room Rate] *</label><input class="form-control" id="at-rent" type="number" placeholder="Select room first" title="Auto-filled from room rate. You may override with a custom rent." /></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Security Deposit (₹)</label><input class="form-control" id="at-dep" type="number" placeholder="16000" /></div>
@@ -261,7 +261,7 @@ function saveTenant(){
   const selRoom = allRooms.find(r=>r.id===roomId);
   const floorNo = selRoom ? selRoom.floor : 1;
   const roomNo = roomId.replace('R','');
-  saveNewTenantToDB(name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit, comp, emergencyContact)
+  saveNewTenantToDB(name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit, comp, emergencyContact, rent)
     .then(()=>{
       console.log('[DB] ✅ Tenant saved to RoomWise_MemberList');
       return Promise.all([loadTenantsFromDB(), loadRoomsFromDB()]);
@@ -363,7 +363,7 @@ function editTenant(id){
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Join Date</label><input class="form-control" id="et-join" type="date" value="${t.joinDate||''}" /></div>
-        <div class="form-group"><label class="form-label">Monthly Rent (₹) [Room Rate]</label><input class="form-control" id="et-rent" type="number" value="${t.rent||''}" readonly style="background:var(--bg3);cursor:not-allowed;" title="Rent is managed under Rooms & Occupancy data" /></div>
+        <div class="form-group"><label class="form-label">Monthly Rent (₹) [Room Rate] *</label><input class="form-control" id="et-rent" type="number" value="${t.rent||''}" title="Auto-filled from room rate. You may override with a custom rent." /></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Security Deposit (₹)</label><input class="form-control" id="et-dep" type="number" value="${t.deposit||''}" /></div>
@@ -419,7 +419,7 @@ function saveEditedTenant(id){
   const allRooms = getRoomOccupancy();
   const selRoom = allRooms.find(r=>r.id===roomId);
   const floorNo = selRoom ? selRoom.floor : 1;
-  updateTenantInDB(t.db_id, name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit, comp, emergencyContact)
+  updateTenantInDB(t.db_id, name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit, comp, emergencyContact, rent)
     .then(()=>{
       console.log('[DB] ✅ Tenant updated in RoomWise_MemberList');
       return Promise.all([loadTenantsFromDB(), loadRoomsFromDB()]);

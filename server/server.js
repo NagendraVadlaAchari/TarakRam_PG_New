@@ -95,7 +95,7 @@ app.get('/api/tenants', async (req, res) => {
         roomId: `R${row.Room_No}`,
         bedNo: 1, // Default
         joinDate: row.DOJ || row.created_at,
-        rent: rent,
+        rent: row.MonthlyRent ? parseFloat(row.MonthlyRent) : rent,
         deposit: row.SecurityDeposit ? parseFloat(row.SecurityDeposit) : rent * 2,
         emergencyContact: row.EmergencyContact || '',
         status: 'active',
