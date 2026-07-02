@@ -172,7 +172,7 @@ async function updateRoomInDB(dbId, originalRoomNo, newRoomNo, floor, capacity, 
 }
 
 // Save new tenant in PostgreSQL RoomWise_MemberList
-async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege, emergencyContact) {
+async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege, emergencyContact, monthlyRent) {
   const nextId = await getNextTenantId();
   const body = {
     id: nextId,
@@ -186,13 +186,14 @@ async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roo
     DOB: dob || null,
     SecurityDeposit: deposit !== undefined && deposit !== null ? String(deposit) : null,
     CompanyCollegeName: companyCollege || null,
-    EmergencyContact: emergencyContact || null
+    EmergencyContact: emergencyContact || null,
+    MonthlyRent: monthlyRent !== undefined && monthlyRent !== null ? String(monthlyRent) : null
   };
   return await supabaseRequest('RoomWise_MemberList', '', 'POST', body);
 }
 
 // Update existing tenant in PostgreSQL RoomWise_MemberList
-async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege, emergencyContact) {
+async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege, emergencyContact, monthlyRent) {
   if (!dbId) throw new Error('No DB ID provided for tenant update');
   const queryParams = `id=eq.${dbId}`;
   const body = {
@@ -206,7 +207,8 @@ async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate
     DOB: dob || null,
     SecurityDeposit: deposit !== undefined && deposit !== null ? String(deposit) : null,
     CompanyCollegeName: companyCollege || null,
-    EmergencyContact: emergencyContact || null
+    EmergencyContact: emergencyContact || null,
+    MonthlyRent: monthlyRent !== undefined && monthlyRent !== null ? String(monthlyRent) : null
   };
   return await supabaseRequest('RoomWise_MemberList', queryParams, 'PATCH', body);
 }
@@ -227,7 +229,8 @@ async function saveVacateDetailsToDB(tenant, vacateDate) {
     Rent: tenant.rent !== undefined && tenant.rent !== null ? String(tenant.rent) : null,
     IDProof: tenant.idProof || null,
     IDNumber: tenant.idNumber || null,
-    EmergencyContact: tenant.emergencyContact || null
+    EmergencyContact: tenant.emergencyContact || null,
+    MonthlyRent: tenant.rent !== undefined && tenant.rent !== null ? String(tenant.rent) : null
   };
   return await supabaseRequest('RoomWise_MemberList_VacateDetails', '', 'POST', body);
 }
@@ -417,7 +420,7 @@ async function fetchDBTenants() {
       const isAC = rNumStr.endsWith('01') || rNumStr.endsWith('02') || rNumStr.endsWith('.01') || rNumStr.endsWith('.02');
       const fallbackRent = isAC ? 8000 : 6000;
       
-      const rent = matchingRoom ? matchingRoom.rent : fallbackRent;
+      const rent = row.MonthlyRent ? parseFloat(row.MonthlyRent) : (matchingRoom ? matchingRoom.rent : fallbackRent);
 
       return {
         id: `T${row.id}`,
