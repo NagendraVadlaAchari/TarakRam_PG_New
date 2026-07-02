@@ -97,6 +97,7 @@ app.get('/api/tenants', async (req, res) => {
         joinDate: row.DOJ || row.created_at,
         rent: rent,
         deposit: row.SecurityDeposit ? parseFloat(row.SecurityDeposit) : rent * 2,
+        emergencyContact: row.EmergencyContact || '',
         status: 'active',
         db_id: row.id
       };

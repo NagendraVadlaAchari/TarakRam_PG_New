@@ -261,7 +261,7 @@ function saveTenant(){
   const selRoom = allRooms.find(r=>r.id===roomId);
   const floorNo = selRoom ? selRoom.floor : 1;
   const roomNo = roomId.replace('R','');
-  saveNewTenantToDB(name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit, comp)
+  saveNewTenantToDB(name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit, comp, emergencyContact)
     .then(()=>{
       console.log('[DB] ✅ Tenant saved to RoomWise_MemberList');
       return loadTenantsFromDB();
@@ -393,7 +393,7 @@ function saveEditedTenant(id){
   const allRooms = getRoomOccupancy();
   const selRoom = allRooms.find(r=>r.id===t.roomId);
   const floorNo = selRoom ? selRoom.floor : '';
-  updateTenantInDB(t.db_id, name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit, comp)
+  updateTenantInDB(t.db_id, name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit, comp, emergencyContact)
     .then(()=>{
       console.log('[DB] ✅ Tenant updated in RoomWise_MemberList');
       return loadTenantsFromDB();
