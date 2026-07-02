@@ -264,7 +264,7 @@ function saveTenant(){
   saveNewTenantToDB(name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit, comp, emergencyContact)
     .then(()=>{
       console.log('[DB] ✅ Tenant saved to RoomWise_MemberList');
-      return loadTenantsFromDB();
+      return Promise.all([loadTenantsFromDB(), loadRoomsFromDB()]);
     })
     .then(() => {
       if (currentPage === 'tenants') {
@@ -302,6 +302,9 @@ function vacateTenant(id){
           console.log('[DB] ✅ Tenant deleted from RoomWise_MemberList');
           const updatedTenants = (DB.get('tenants')||[]).filter(item => item.id !== id);
           DB.set('tenants', updatedTenants);
+          return loadRoomsFromDB();
+        })
+        .then(()=>{
           showToast('Tenant vacated! Record saved to vacate history.','success');
           navigateTo('tenants');
         })
@@ -324,6 +327,7 @@ function editTenant(id){
   const t = tenants.find(t=>t.id===id);
   if(!t) return;
   closeModal();
+  const rooms = getRoomOccupancy();
   setTimeout(()=>{
     showModal(`Edit Tenant — ${t.name}`,`
       <div class="form-row">
@@ -337,6 +341,25 @@ function editTenant(id){
       <div class="form-row">
         <div class="form-group"><label class="form-label">Occupation</label><input class="form-control" id="et-occ" value="${t.occupation||''}" /></div>
         <div class="form-group"><label class="form-label">Company / College</label><input class="form-control" id="et-comp" value="${t.company||''}" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Room *</label>
+          <select class="form-control" id="et-room" onchange="updateEditBeds('${t.id}')">
+            ${rooms.map(r=>{
+              const isCurrentRoom = r.id === t.roomId;
+              const bedsFree = r.beds - r.occupied + (isCurrentRoom ? 1 : 0);
+              if (bedsFree > 0 || isCurrentRoom) {
+                return `<option value="${r.id}" ${isCurrentRoom ? 'selected' : ''}>Room ${r.number} (Floor ${r.floor}) - ${bedsFree} beds free - ₹${r.rent}</option>`;
+              }
+              return '';
+            }).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Bed No *</label>
+          <select class="form-control" id="et-bed">
+            <!-- Will be populated dynamically -->
+          </select>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Join Date</label><input class="form-control" id="et-join" type="date" value="${t.joinDate||''}" /></div>
@@ -360,6 +383,7 @@ function editTenant(id){
         <button class="btn btn-primary" onclick="saveEditedTenant('${t.id}')"><i class="fas fa-save"></i> Save Changes</button>
       </div>
     `,false);
+    updateEditBeds(id);
   },200);
 }
 
@@ -377,26 +401,28 @@ function saveEditedTenant(id){
   const idProof = document.getElementById('et-idtype').value;
   const idNumber = document.getElementById('et-idnum').value.trim();
   const emergencyContact = document.getElementById('et-emerg').value.trim();
+  const roomId = document.getElementById('et-room').value;
+  const bedNo = parseInt(document.getElementById('et-bed').value)||1;
 
-  if(!name||!mobile){ showToast('Name and Mobile are required','error'); return; }
+  if(!name||!mobile||!roomId){ showToast('Name, Mobile and Room are required','error'); return; }
 
   const tenants = DB.get('tenants')||[];
   const t = tenants.find(t=>t.id===id);
   if(!t){ showToast('Tenant not found','error'); return; }
 
   // Update in localStorage
-  Object.assign(t,{name,mobile,email,dob,occupation:occ,company:comp,joinDate,rent,deposit,noticePeriod,idProof,idNumber,emergencyContact});
+  Object.assign(t,{name,mobile,email,dob,occupation:occ,company:comp,roomId,bedNo,joinDate,rent,deposit,noticePeriod,idProof,idNumber,emergencyContact});
   DB.set('tenants',tenants);
 
   // Update in PostgreSQL
-  const roomNo = t.roomId ? t.roomId.replace('R','') : '';
+  const roomNo = roomId ? roomId.replace('R','') : '';
   const allRooms = getRoomOccupancy();
-  const selRoom = allRooms.find(r=>r.id===t.roomId);
-  const floorNo = selRoom ? selRoom.floor : '';
+  const selRoom = allRooms.find(r=>r.id===roomId);
+  const floorNo = selRoom ? selRoom.floor : 1;
   updateTenantInDB(t.db_id, name, mobile, occ||'Member', joinDate, roomNo, String(floorNo), email, dob, deposit, comp, emergencyContact)
     .then(()=>{
       console.log('[DB] ✅ Tenant updated in RoomWise_MemberList');
-      return loadTenantsFromDB();
+      return Promise.all([loadTenantsFromDB(), loadRoomsFromDB()]);
     })
     .then(() => {
       if (currentPage === 'tenants') {
@@ -408,6 +434,33 @@ function saveEditedTenant(id){
   closeModal();
   showToast('Tenant updated successfully!','success');
   navigateTo('tenants');
+}
+
+function updateEditBeds(tenantId) {
+  const roomId = document.getElementById('et-room').value;
+  if(!roomId) { document.getElementById('et-bed').innerHTML='<option value="">Select room first</option>'; return; }
+  
+  const tenants = DB.get('tenants') || [];
+  const t = tenants.find(x => x.id === tenantId);
+  const rooms = getRoomOccupancy();
+  const room = rooms.find(r => r.id === roomId);
+  if(!room) return;
+  
+  const occupied = tenants
+    .filter(x => x.roomId === roomId && x.status === 'active' && x.id !== tenantId)
+    .map(x => x.bedNo);
+  
+  const freeBeds = Array.from({length: room.beds}, (_, i) => i + 1).filter(b => !occupied.includes(b));
+  
+  const currentBedNo = t && t.roomId === roomId ? t.bedNo : null;
+  
+  document.getElementById('et-bed').innerHTML = freeBeds.map(b => 
+    `<option value="${b}" ${b === currentBedNo ? 'selected' : ''}>Bed ${b}</option>`
+  ).join('');
+  
+  if (document.getElementById('et-rent')) {
+    document.getElementById('et-rent').value = room.rent;
+  }
 }
 
 function exportTenants(){
