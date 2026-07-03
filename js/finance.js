@@ -71,7 +71,7 @@ function renderDuesSection(){
 
     <div class="card">
       <div class="card-title"><i class="fas fa-chart-bar"></i> Monthly Collection</div>
-      ${['2026-01','2026-02','2026-03','2026-04','2026-05'].map(m=>{
+      ${getMonthsUpToNow().slice().reverse().map(m=>{
         const mPayments = payments.filter(p=>p.month===m);
         const mPaid = mPayments.filter(p=>p.status==='paid').length;
         const pct = mPayments.length ? Math.round(mPaid/mPayments.length*100) : 0;
@@ -99,7 +99,7 @@ function renderDuesSection(){
       <div style="display:flex;gap:10px">
         <select class="form-control" id="pay-month-filter" style="width:140px" onchange="filterPayments()">
           <option value="">All Months</option>
-          ${['2026-05','2026-04','2026-03','2026-02','2026-01'].map(m=>`<option value="${m}">${m}</option>`).join('')}
+          ${getMonthsUpToNow().map(m=>`<option value="${m}">${m}</option>`).join('')}
         </select>
         <select class="form-control" id="pay-status-filter" style="width:120px" onchange="filterPayments()">
           <option value="">All Status</option>

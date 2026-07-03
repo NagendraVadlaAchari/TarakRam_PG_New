@@ -371,14 +371,29 @@ function renderTenantDashboard(){
 }
 
 // ---- Rent Collection Page ----
+function getMonthsUpToNow() {
+  // Returns array of YYYY-MM strings from Jan 2026 up to (and including) current month, newest first
+  const now = new Date();
+  const startYear = 2026, startMonth = 1;
+  const months = [];
+  let y = now.getFullYear(), m = now.getMonth() + 1; // 1-based
+  while (y > startYear || (y === startYear && m >= startMonth)) {
+    months.push(`${y}-${String(m).padStart(2,'0')}`);
+    m--;
+    if (m === 0) { m = 12; y--; }
+  }
+  return months;
+}
+
 function renderRentCollection(){
   const user = getCurrentUser();
-  const currentMonth = new Date().toISOString().slice(0,7);
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   const tenants = (DB.get('tenants')||[]).filter(t=>t.status==='active');
   const activeIds = tenants.map(t=>t.id);
   const payments = (DB.get('payments')||[]).filter(p=>activeIds.includes(p.tenantId));
 
-  const months=['2026-05','2026-04','2026-03','2026-02','2026-01'];
+  const months = getMonthsUpToNow();
 
   return `
   <div class="page-header">
@@ -396,6 +411,7 @@ function renderRentCollection(){
     ${renderRCTable(currentMonth, tenants, payments)}
   </div>`;
 }
+
 
 function renderRCTable(month, tenants, payments){
   const paid = payments.filter(p=>p.month===month&&p.status==='paid');

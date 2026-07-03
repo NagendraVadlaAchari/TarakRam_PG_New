@@ -196,7 +196,7 @@ function showAddTenantModal(){
       <div class="form-group"><label class="form-label">Monthly Rent (₹) [Room Rate] *</label><input class="form-control" id="at-rent" type="number" placeholder="Select room first" title="Auto-filled from room rate. You may override with a custom rent." /></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Security Deposit (₹)</label><input class="form-control" id="at-dep" type="number" placeholder="16000" /></div>
+      <div class="form-group"><label class="form-label">Security Deposit (₹)</label><input class="form-control" id="at-dep" type="number" placeholder="3000" value="3000" /></div>
       <div class="form-group"><label class="form-label">Notice Period (days)</label><input class="form-control" id="at-notice" type="number" value="30" /></div>
     </div>
     <div class="form-row">
@@ -204,12 +204,14 @@ function showAddTenantModal(){
         <select class="form-control" id="at-idtype"><option>Aadhar</option><option>Passport</option><option>Voter ID</option><option>DL</option><option>PAN Card</option></select>
       </div>
       <div class="form-group"><label class="form-label">ID Number</label><input class="form-control" id="at-idnum" placeholder="ID document number" /></div>
-    </div>
     <div class="form-group"><label class="form-label">Emergency Contact</label><input class="form-control" id="at-emerg" placeholder="Name & mobile of emergency contact" /></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveTenant()"><i class="fas fa-save"></i> Save Tenant</button>
     </div>`,false);
+  // Prevent closing the form by clicking the backdrop (avoid losing entered data)
+  const atOverlay = document.getElementById('modal-overlay');
+  if (atOverlay) atOverlay.onclick = null;
 }
 
 function updateBeds(){
@@ -222,7 +224,9 @@ function updateBeds(){
   const freeBeds = Array.from({length:room.beds},(_,i)=>i+1).filter(b=>!occupied.includes(b));
   document.getElementById('at-bed').innerHTML = freeBeds.map(b=>`<option value="${b}">Bed ${b}</option>`).join('');
   document.getElementById('at-rent').value = room.rent;
-  document.getElementById('at-dep').value = room.rent*2;
+  // Keep deposit at default 3000 unless already changed by user
+  const depField = document.getElementById('at-dep');
+  if (!depField.dataset.userEdited) depField.value = 3000;
 }
 
 function saveTenant(){
@@ -383,6 +387,9 @@ function editTenant(id){
         <button class="btn btn-primary" onclick="saveEditedTenant('${t.id}')"><i class="fas fa-save"></i> Save Changes</button>
       </div>
     `,false);
+    // Prevent closing the form by clicking the backdrop (avoid data loss)
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.onclick = null;
     updateEditBeds(id);
   },200);
 }
