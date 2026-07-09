@@ -72,7 +72,7 @@ function renderRoomsPage(){
       </div>
       <div class="floor-grid">
         ${floors.length > 0 ? floors.map(f=>{
-          const floorRooms = rooms.filter(r=>r.floor===f);
+          const floorRooms = rooms.filter(r=>r.floor===f).sort((a,b)=>parseInt(a.number)-parseInt(b.number));
           return `<div class="floor-row">
             <div class="floor-label">Floor ${f}</div>
             <div class="rooms-row">
@@ -95,7 +95,7 @@ function renderRoomsPage(){
         <table>
           <thead><tr><th>Room</th><th>Floor</th><th>Type</th><th>Beds</th><th>Occupied</th><th>Rent/Bed</th><th>Status</th></tr></thead>
           <tbody>
-            ${rooms.length > 0 ? rooms.map(r=>{
+            ${rooms.length > 0 ? [...rooms].sort((a,b)=>{ const fa=parseInt(a.floor)||0, fb=parseInt(b.floor)||0; if(fa!==fb) return fa-fb; return parseInt(a.number)-parseInt(b.number); }).map(r=>{
               const vacant = r.beds - r.occupied;
               const cls = r.occupied===0?'badge-success':r.occupied===r.beds?'badge-danger':'badge-warning';
               const lbl = r.occupied===0?'Vacant':r.occupied===r.beds?'Full':`${vacant} Vacant`;
