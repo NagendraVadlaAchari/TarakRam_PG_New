@@ -238,7 +238,7 @@ function renderAdminDashboard(){
       </div>
       <div class="floor-grid">
         ${[1,2,3,4,5,6].map(f=>{
-          const floorRooms = rooms.filter(r=>r.floor===f);
+          const floorRooms = rooms.filter(r=>r.floor===f).sort((a,b)=>parseInt(a.number)-parseInt(b.number));
           return `<div class="floor-row">
             <div class="floor-label">Floor ${f}</div>
             <div class="rooms-row">
