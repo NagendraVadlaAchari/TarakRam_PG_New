@@ -34,10 +34,14 @@ app.get('/api/rooms', async (req, res) => {
       const roomMembers = members.filter(m => m.Room_No === row.Room_No);
       
       const rNumStr = String(row.Room_No);
-      const isAC = rNumStr.endsWith('01') || rNumStr.endsWith('02') || rNumStr.endsWith('.01') || rNumStr.endsWith('.02');
-      const type = isAC ? 'AC' : 'Non-AC';
+      // Read TYPE directly from DB column; fall back to suffix-based detection if not set
+      let type = row.TYPE || row.type || row.Type || null;
+      if (!type || (type !== 'AC' && type !== 'Non-AC')) {
+        const isAC = rNumStr.endsWith('01') || rNumStr.endsWith('02') || rNumStr.endsWith('.01') || rNumStr.endsWith('.02');
+        type = isAC ? 'AC' : 'Non-AC';
+      }
       const rentFromDB = row.Room_Rent ? parseFloat(row.Room_Rent) : null;
-      const rent = rentFromDB || (isAC ? 8000 : 6000);
+      const rent = rentFromDB || (type === 'AC' ? 8000 : 6000);
       
       return {
         id: `R${row.Room_No}`,
@@ -93,11 +97,13 @@ app.get('/api/tenants', async (req, res) => {
         occupation: row.Occupation || 'Member',
         company: 'SLV PG',
         roomId: `R${row.Room_No}`,
-        bedNo: 1, // Default
+        bedNo: row.Bed_No ? parseInt(row.Bed_No) : 1,
         joinDate: row.DOJ || row.created_at,
         rent: row.MonthlyRent ? parseFloat(row.MonthlyRent) : rent,
         deposit: row.SecurityDeposit ? parseFloat(row.SecurityDeposit) : rent * 2,
         emergencyContact: row.EmergencyContact || '',
+        idProof: row.IDProof || '',
+        idNumber: row.IDNumber || '',
         status: 'active',
         db_id: row.id
       };

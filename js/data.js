@@ -83,12 +83,15 @@ async function fetchDBRooms() {
     const rooms = roomRows.map(row => {
       const roomMembers = memberRows.filter(m => m.Room_No === row.Room_No);
       const rNumStr = String(row.Room_No);
-      // Determine AC/Non-AC type based on room number suffix
-      const isAC = rNumStr.endsWith('01') || rNumStr.endsWith('02') || rNumStr.endsWith('.01') || rNumStr.endsWith('.02');
-      const type = isAC ? 'AC' : 'Non-AC';
+      // Read TYPE directly from DB column if available; fall back to suffix-based detection
+      let type = row.TYPE || row.type || row.Type || null;
+      if (!type || (type !== 'AC' && type !== 'Non-AC')) {
+        const isAC = rNumStr.endsWith('01') || rNumStr.endsWith('02') || rNumStr.endsWith('.01') || rNumStr.endsWith('.02');
+        type = isAC ? 'AC' : 'Non-AC';
+      }
       // Read rent from Room_Rent column; fall back to type-based default if not set
       const rentFromDB = row.Room_Rent ? parseFloat(row.Room_Rent) : null;
-      const rent = rentFromDB || (isAC ? 8000 : 6000);
+      const rent = rentFromDB || (type === 'AC' ? 8000 : 6000);
 
       return {
         id: `R${row.Room_No}`,
@@ -141,20 +144,21 @@ async function getNextTenantId() {
 }
 
 // Save new room in PostgreSQL
-async function saveNewRoomToDB(roomNumber, floor, capacity, rent) {
+async function saveNewRoomToDB(roomNumber, floor, capacity, rent, type) {
   const nextId = await getNextRoomId();
   const body = {
     id: nextId,
     Room_No: String(roomNumber),
     Floor_No: String(floor),
     Room_Capacity: String(capacity),
-    Room_Rent: rent ? parseFloat(rent) : null
+    Room_Rent: rent ? parseFloat(rent) : null,
+    TYPE: type || null
   };
   return await supabaseRequest('TarakRam_RoomDetails', '', 'POST', body);
 }
 
 // Update existing room in PostgreSQL
-async function updateRoomInDB(dbId, originalRoomNo, newRoomNo, floor, capacity, rent) {
+async function updateRoomInDB(dbId, originalRoomNo, newRoomNo, floor, capacity, rent, type) {
   let queryParams = '';
   if (dbId) {
     queryParams = `id=eq.${dbId}`;
@@ -166,13 +170,14 @@ async function updateRoomInDB(dbId, originalRoomNo, newRoomNo, floor, capacity, 
     Room_No: String(newRoomNo),
     Floor_No: String(floor),
     Room_Capacity: String(capacity),
-    Room_Rent: rent ? parseFloat(rent) : null
+    Room_Rent: rent ? parseFloat(rent) : null,
+    TYPE: type || null
   };
   return await supabaseRequest('TarakRam_RoomDetails', queryParams, 'PATCH', body);
 }
 
 // Save new tenant in PostgreSQL RoomWise_MemberList
-async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege, emergencyContact, monthlyRent) {
+async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege, emergencyContact, monthlyRent, bedNo, idNumber, idProof) {
   const nextId = await getNextTenantId();
   const body = {
     id: nextId,
@@ -187,13 +192,16 @@ async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roo
     SecurityDeposit: deposit !== undefined && deposit !== null ? String(deposit) : null,
     CompanyCollegeName: companyCollege || null,
     EmergencyContact: emergencyContact || null,
-    MonthlyRent: monthlyRent !== undefined && monthlyRent !== null ? String(monthlyRent) : null
+    MonthlyRent: monthlyRent !== undefined && monthlyRent !== null ? String(monthlyRent) : null,
+    Bed_No: bedNo !== undefined && bedNo !== null ? String(bedNo) : null,
+    IDNumber: idNumber || null,
+    IDProof: idProof || null
   };
   return await supabaseRequest('RoomWise_MemberList', '', 'POST', body);
 }
 
 // Update existing tenant in PostgreSQL RoomWise_MemberList
-async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege, emergencyContact, monthlyRent) {
+async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege, emergencyContact, monthlyRent, bedNo, idNumber, idProof) {
   if (!dbId) throw new Error('No DB ID provided for tenant update');
   const queryParams = `id=eq.${dbId}`;
   const body = {
@@ -208,7 +216,10 @@ async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate
     SecurityDeposit: deposit !== undefined && deposit !== null ? String(deposit) : null,
     CompanyCollegeName: companyCollege || null,
     EmergencyContact: emergencyContact || null,
-    MonthlyRent: monthlyRent !== undefined && monthlyRent !== null ? String(monthlyRent) : null
+    MonthlyRent: monthlyRent !== undefined && monthlyRent !== null ? String(monthlyRent) : null,
+    Bed_No: bedNo !== undefined && bedNo !== null ? String(bedNo) : null,
+    IDNumber: idNumber || null,
+    IDProof: idProof || null
   };
   return await supabaseRequest('RoomWise_MemberList', queryParams, 'PATCH', body);
 }
@@ -431,11 +442,13 @@ async function fetchDBTenants() {
         occupation: row.Occupation || 'Member',
         company: row.CompanyCollegeName || row.Company || '',
         roomId: tenantRoomId,
-        bedNo: 1,
+        bedNo: row.Bed_No ? parseInt(row.Bed_No) : 1,
         joinDate: row.DOJ || row.created_at,
         rent: rent,
         deposit: row.SecurityDeposit ? parseFloat(row.SecurityDeposit) : 0,
         emergencyContact: row.EmergencyContact || '',
+        idProof: row.IDProof || '',
+        idNumber: row.IDNumber || '',
         status: 'active',
         db_id: row.id
       };
