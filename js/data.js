@@ -177,7 +177,7 @@ async function updateRoomInDB(dbId, originalRoomNo, newRoomNo, floor, capacity, 
 }
 
 // Save new tenant in PostgreSQL RoomWise_MemberList
-async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege, emergencyContact, monthlyRent, bedNo, idNumber, idProof) {
+async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege, emergencyContact, monthlyRent, bedNo, idNumber) {
   const nextId = await getNextTenantId();
   const body = {
     id: nextId,
@@ -194,14 +194,13 @@ async function saveNewTenantToDB(tenantName, mobileNo, occupation, joinDate, roo
     EmergencyContact: emergencyContact || null,
     MonthlyRent: monthlyRent !== undefined && monthlyRent !== null ? String(monthlyRent) : null,
     Bed_No: bedNo !== undefined && bedNo !== null ? String(bedNo) : null,
-    IDNumber: idNumber || null,
-    IDProof: idProof || null
+    IDNumber: idNumber || null
   };
   return await supabaseRequest('RoomWise_MemberList', '', 'POST', body);
 }
 
 // Update existing tenant in PostgreSQL RoomWise_MemberList
-async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege, emergencyContact, monthlyRent, bedNo, idNumber, idProof) {
+async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate, roomNo, floorNo, email, dob, deposit, companyCollege, emergencyContact, monthlyRent, bedNo, idNumber) {
   if (!dbId) throw new Error('No DB ID provided for tenant update');
   const queryParams = `id=eq.${dbId}`;
   const body = {
@@ -218,8 +217,7 @@ async function updateTenantInDB(dbId, tenantName, mobileNo, occupation, joinDate
     EmergencyContact: emergencyContact || null,
     MonthlyRent: monthlyRent !== undefined && monthlyRent !== null ? String(monthlyRent) : null,
     Bed_No: bedNo !== undefined && bedNo !== null ? String(bedNo) : null,
-    IDNumber: idNumber || null,
-    IDProof: idProof || null
+    IDNumber: idNumber || null
   };
   return await supabaseRequest('RoomWise_MemberList', queryParams, 'PATCH', body);
 }
@@ -447,7 +445,6 @@ async function fetchDBTenants() {
         rent: rent,
         deposit: row.SecurityDeposit ? parseFloat(row.SecurityDeposit) : 0,
         emergencyContact: row.EmergencyContact || '',
-        idProof: row.IDProof || '',
         idNumber: row.IDNumber || '',
         status: 'active',
         db_id: row.id

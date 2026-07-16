@@ -102,7 +102,6 @@ app.get('/api/tenants', async (req, res) => {
         rent: row.MonthlyRent ? parseFloat(row.MonthlyRent) : rent,
         deposit: row.SecurityDeposit ? parseFloat(row.SecurityDeposit) : rent * 2,
         emergencyContact: row.EmergencyContact || '',
-        idProof: row.IDProof || '',
         idNumber: row.IDNumber || '',
         status: 'active',
         db_id: row.id
