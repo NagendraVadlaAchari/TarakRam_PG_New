@@ -571,7 +571,7 @@ function sendIndividualReminder(tenantId, month) {
   // WhatsApp Integration
   if (t.mobile) {
     const waNumber = t.mobile.replace(/[^0-9]/g, '');
-    const waMessage = `Dear ${t.name}, your rent of ₹${t.rent.toLocaleString()} for ${month} is pending at SLV PG. Please complete your payment at the earliest. Thank you!`;
+    const waMessage = `Dear ${t.name}, your rent of ₹${t.rent.toLocaleString()} for ${month} is pending at Tarak Ram Luxury Women's pg. Please complete your payment at the earliest. Thank you!`;
     const waUrl = `https://api.whatsapp.com/send?phone=${waNumber}&text=${encodeURIComponent(waMessage)}`;
     window.open(waUrl, '_blank');
   }
@@ -604,7 +604,7 @@ function sendSelectedReminders(month) {
       // WhatsApp Integration (sequential delayed popup to avoid browser blocks)
       if (t.mobile) {
         const waNumber = t.mobile.replace(/[^0-9]/g, '');
-        const waMessage = `Dear ${t.name}, your rent of ₹${t.rent.toLocaleString()} for ${month} is pending at SLV PG. Please complete your payment at the earliest. Thank you!`;
+        const waMessage = `Dear ${t.name}, your rent of ₹${t.rent.toLocaleString()} for ${month} is pending at Tarak Ram Luxury Women's pg. Please complete your payment at the earliest. Thank you!`;
         const waUrl = `https://api.whatsapp.com/send?phone=${waNumber}&text=${encodeURIComponent(waMessage)}`;
         
         setTimeout(() => {
